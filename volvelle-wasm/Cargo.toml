@@ -1,0 +1,17 @@
+[package]
+name = "volvelle-wasm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "volvelle_wasm"
+path = "src/lib.rs"
+crate-type = [ "cdylib" ]
+
+[dependencies]
+serde = { version = "1", default-features = false, features = [ "derive" ] } 
+serde-wasm-bindgen = { version = "0.4", default-features = false }
+wasm-bindgen = { version = "0.2", default-features = false }
+

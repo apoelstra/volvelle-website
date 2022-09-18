@@ -1,0 +1,164 @@
+body {
+  background-image:  url("/img/bg.gif");
+  font-size: 11pt;
+  font-family: sans-serif;
+}
+
+img {
+  border: 0;
+}
+
+#title {
+  margin-top: 2em;
+  margin-left:  auto;
+  margin-right: auto;
+
+  width:  75%;
+  min-width: 580px;
+  max-width: 1200px;
+  height: 200px;
+  padding: 0 16px;
+
+  background-image: linear-gradient(#663003, #885003);
+  background-repeat: repeat-x;
+  background-color: #663003;
+
+  vertical-align: middle;
+}
+
+#title IMG    { position: relative; }
+#title .tlimg { float: left; left: -16px; }
+#title #trimg { float: right; right: -16px; }
+
+#title #slogan {
+  font-family: serif;
+  color: #FFFFFF;
+  font-size: 16pt;
+  font-style: italic;
+  text-decoration: none;
+
+  padding-top: 120px;
+  height: 29px;
+}
+
+#title #top_links .tllink, .trlink {
+  font-family: sans-serif;
+  color: #fff;
+  font-size: 14pt;
+  text-decoration: none;
+  margin-right: 1.0em;
+
+  padding: 1ex;
+  border: 2px solid black;
+  background-image: linear-gradient(#860, #a82);
+
+  float: left;
+}
+#title #top_links .tllink:hover {
+  background-image: linear-gradient(#b80, #a82);
+}
+
+#title #top_links .trlink, .crlink {
+  background-image: linear-gradient(#060, #382);
+}
+#title #top_links .trlink:hover {
+  background-image: linear-gradient(#0f0, #382);
+}
+
+#title #top_links .cllink, .crlink {
+  font-family: sans-serif;
+  color: #fff;
+  font-size: 14pt;
+  text-decoration: none;
+  margin-right: 1.0em;
+
+  padding: 1ex;
+  border: 2px solid black;
+  background-image: linear-gradient(#740, #862);
+
+  float: left;
+}
+
+#title #top_links .trlink, .crlink {
+  float: right;
+  margin-right: 0;
+  margin-left: 1em;
+}
+
+#title #top_links .crlink {
+  background-image: linear-gradient(#060, #382);
+}
+
+#div_content {
+  margin-left:  auto;
+  margin-right: auto;
+
+  width:  75%;
+  min-width: 580px;
+  max-width: 1000px;
+  border: 1px solid black;
+  border-top: 0;
+
+  padding: 15px;
+  background-color: white;
+
+  text-align: left;
+}
+
+.para {
+  text-indent: 2em;
+  display: block;
+  margin-top: 2ex;
+  margin-bottom: 2ex;
+  line-height: 150%;
+}
+
+H1 {
+  font-family: verdana, arial;
+  font-size: 14pt;
+}
+
+H2 {
+  font-family: verdana, arial;
+  font-style: oblique;
+  font-weight: normal;
+  font-size: 11pt;
+}
+
+#div_worksheet {
+    margin-top: 1em;
+    position: relative;
+    height: 40em;
+}
+
+.cell {
+    background: transparent;
+    text-align: center;
+    position: absolute;
+    border: 0;
+    padding: 0;
+    width: 1.5em;
+    height: 1.5em;
+}
+
+.cell_hrp {
+    outline: 3px solid black;
+    outline-offset: -1.5px;
+    text-align: center;
+}
+
+.cell_data {
+    outline: 3px solid black;
+    outline-offset: -1.5px;
+    text-align: center;
+}
+
+.cell_reduction, .cell_sum, .cell_residue {
+    outline: 1px solid black;
+    outline-offset: -0.5px;
+    text-align: center;
+}
+
+.cell_pink {
+    background-color: #faf;
+}

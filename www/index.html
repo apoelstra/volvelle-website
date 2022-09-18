@@ -1,0 +1,52 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/xml; charset=utf-8" />
+  <meta http-equiv="content-language" content="en-ca" />
+  <meta http-equiv="keywords" content="volvelles,paper,computers,shamir,ssss,codex32,bitcoin" />
+  <link rel="stylesheet" href="main.css" type="text/css" />
+  <title>Codex32: An Illustrated Secret Sharing Guide</title>
+</head>
+<body>
+
+    <div id="title">
+      <a href="./index.html"><img class="tlimg" src="codex32_sm.png" alt="Codex32 Logo" /></a>
+      <div id="slogan"></div>
+      <div id="top_links">
+        <span class="cllink">HOME</span>
+        <a href="interactive/index.html" class="tllink">INTERACTIVE TOOLS</a>
+        <a href="faq/index.html" class="tllink">FAQ</a>
+        <a href="docs/index.html" class="tllink">DOCUMENTS</a>
+        <a href="help/index.html" class="trlink">HELP!</a>
+      </div>
+    </div>
+    <div id="content">
+    <h1>Codex32</h1>
+    <p>Codex32 is an error-correcting code designed to be computable without the use of
+    electronic computers. Users can compute and verify checksums by hand; we have
+    provided lookup tables, <a href="https://en.wikipedia.org/wiki/Volvelle">volvelles</a>
+    and worksheets to assist with this process.</p>
+    <p>The codex32 checksum, like all linear codes, is compatible with
+    <a href="https://en.wikipedia.org/wiki/Shamir%27s_Secret_Sharing">Shamir's Secret Sharing
+    Scheme</a>, a mechanism to split a secret into many "shares", such that the original
+    secret can be reconstructed from some number of them. In SSSS, users choose a threshold
+    value <i>k</i>, typically 2 or 3; they then generate <i>k</i>-many random shares, and
+    then compute a number of derived shares (up to 31 in total). A random secret can then
+    be computed from any <i>k</i> shares.</p>
+    <p>If the initial random shares have a valid codex32 checksum, then so will all the
+    derived shares and the final secret.</p>
+    <h1>Getting Started</h1>
+    <p>The premise behind codex32 is that you will be generating, checksumming and splitting a
+    <a href="https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki">BIP32</a>
+    master seed, from which you will derive Bitcoin addresses. Before getting started,
+    make sure you have a Bitcoin wallet which is able to import codex32-encoded seed
+    shares.
+    </p>
+    <p>As of this writing (April 2022), no such wallets exist. Therefore this project
+    should be considered as a fun experiment, but cannot be used in practice. Very
+    reckless users can consider converting their SLIP39 or BIP39 seed words into the
+    codex32 encoding, and then converting back before wallet import.</p>
+    </div>
+</body>
+</html>

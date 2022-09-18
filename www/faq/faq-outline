@@ -1,0 +1,38 @@
+
+
+Scheme
+  - Is this real? Is it secure?
+    - discussion that ECC is not secure against adversarial mistakes
+    - suggestion that somebody could e.g. swap columns of symbols
+    - suggestion that users read the postscript
+  - How does this compare to SLIP39?
+    - more detailed comparison between the checksum strengths
+    - no pw, hardening, etc
+  - How does this compare to BIP39?
+
+Usage
+  - Why would anybody use this?
+  - How long will it take?
+  - Can I use it for passwords? For safe combos etc?
+     - suggest repitition code for safe combos
+       - observe that SSSS will still work with a repetition code
+     - suggest not using bech32 for passwords
+
+HWW Support
+  - What hardware wallets support this scheme?
+  - Can I just convert to/from SLIP39? To/from BIP39?
+
+Dice Worksheet
+  - Do I actually have to re-roll the dice twice?
+  - How can I speed things up?
+     - using a tupperware
+     - using >6 sides
+     - using >5 dice
+
+Translation Worksheet
+  - what about k>3?
+
+
+
+
+

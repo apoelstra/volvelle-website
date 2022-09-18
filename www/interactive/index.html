@@ -1,0 +1,411 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/xml; charset=utf-8" />
+  <meta http-equiv="content-language" content="en-ca" />
+  <meta http-equiv="keywords" content="volvelles,paper,computers,shamir,ssss,codex32,bitcoin" />
+  <link rel="stylesheet" href="../main.css" type="text/css" />
+  <title>Codex32: An Illustrated Secret Sharing Guide</title>
+  <script src='./dom.js'></script>
+</head>
+<body onload="new_session()">
+    <div id="title">
+      <a href="../index.html"><img class="tlimg" src="../codex32_sm.png" alt="Codex32 Logo" /></a>
+      <div id="slogan"></div>
+      <div id="top_links">
+        <a href="../index.html" class="tllink">HOME</a>
+        <span class="cllink">INTERACTIVE TOOLS</span>
+        <a href="../faq/index.html" class="tllink">FAQ</a>
+        <a href="../docs/index.html" class="tllink">DOCUMENTS</a>
+        <a href="../help/index.html" class="trlink">HELP!</a>
+      </div>
+    </div>
+    <div id="div_content">
+      <noscript><font color="red">You must enable javascript for the interactive tools to work.</font></noscript>
+      <div id="div_home">
+        <h1>Interactive Worksheets</h1>
+        <table width="50%"><tr>
+        <td style="text-align: right"><label for="i_checksum">HRP: </label></td>
+        <td><input id="i_hrp" name="i_hrp" onchange="selectGlobalParams()" value="ms"></td>
+        </tr><tr>
+        <td style="text-align: right"><label for="i_checksum">Checksum: </label></td>
+        <td><select id="i_checksum" name="i_checksum" onchange="selectGlobalParams()">
+          <option value="codex32">codex32</option>
+          <option value="bech32">bech32</option>
+        </select></td>
+        </tr><tr>
+        <td style="text-align: right"><label for="i_size">Share Size: </label></td>
+        <td><select id="i_size" name="i_size" onchange="selectGlobalParams()">
+          <option value="17">17 (workshop 2022-10)</option>
+          <option value="32">32 (workshop 2022-06)</option>
+          <option value="48" selected="true">48 (128-bit secret)</option>
+        </select></td>
+        </tr><tr>
+        <td style="text-align: right"><label for="i_k">Threshold: </label></td>
+        <td><select id="i_k" name="i_k" onchange="selectGlobalParams()">
+          <option value = "0">1 (no splitting)</option>
+          <option value = "2">2</option>
+          <option value = "3">3</option>
+          <option value = "4">4</option>
+          <option value = "5">5</option>
+          <option value = "6">6</option>
+          <option value = "7">7</option>
+          <option value = "8">8</option>
+          <option value = "9">9</option>
+        </select></td>
+        </tr>
+        <tr style="text-align: center">
+        <td><input style="padding: 0.5ex 2ex; margin: 1em 0" type="button" value="Cancel" disabled id="bt_cancel" onclick="cancelGlobalParams()" /></td>
+        <td><input style="padding: 0.5ex 2ex; margin: 1em 0" type="button" value="Update" disabled id="bt_update" onclick="updateGlobalParams()" /></td>
+        </tr></table>
+        <h1>Shares</h1>
+        <div id="div_sharelist">
+          <a id="a_newshare" href="#" onclick="newShare()">New initial share</a><br />
+        </div>
+      </div>
+
+      <div id="div_worksheet">...</div>
+
+      <script>
+        // Hacky way to compute the width of a cell after borders etc are factored in
+        // Note that this needs to be in the document body (or in an onload handler,
+        // but it is hard then to assign to the constant g_cellparams)
+        let dummy = document.createElement("input");
+        dummy.className = "cell";
+        dummy.style.borderLeft = "0.2em";
+        dummy.style.borderTop = "0.2em";
+        dummy.value = "X";
+        document.body.appendChild(dummy);
+        const g_cellparams = {
+            height: dummy.offsetHeight,
+            width: dummy.offsetWidth,
+            spacer: dummy.offsetHeight / 4
+        };
+        document.body.removeChild(dummy); // you didn't see nothin
+
+         // Attach handlers to all the config dropdowns
+         function setup1() {
+             for (let inp of document.getElementsByTagName("select")) {
+                 inp.addEventListener('change', refreshTable);
+             }
+             document.getElementById("a_newshare").addEventListener('click', newShare);
+             document.getElementById("a_home").addEventListener('click', showHome);
+             document.getElementById("i_k").addEventListener('change', changeThreshold);
+         }
+
+         let g_threshold = "0";
+         let g_id = "NAME";
+         let g_shares = [];
+         let g_share_links = [];
+         let g_current_share = 0;
+         let g_checksum_data_cells = [];
+         // Handler for changing the global threshold value
+         function changeThreshold(ev) {
+             if (ev.currentTarget.value != g_threshold && g_shares.length > 0) {
+                 if (confirm("Are you sure? Changing the threshold value will delete all of your shares.")) {
+                     g_shares = [];
+                     g_current_share = 0;
+                     let newShareA = document.getElementById("a_newshare");
+                     newShareA.textContent = "New initial share";
+
+                     let sharelist = document.getElementById("div_sharelist");
+                     sharelist.textContent = "";
+                     sharelist.appendChild(newShareA);
+                 } else {
+                     ev.currentTarget.value = g_threshold;
+                     return false;
+                 }
+             }
+             g_threshold = ev.currentTarget.value;
+         }
+
+         function hideAll(ev) {
+             document.getElementById("div_home").style.display = "none";
+             document.getElementById("div_shareedit").style.display = "none";
+         }
+
+         // Handle for returninng to home
+         function showHome(ev) {
+             hideAll();
+             let toShow = document.getElementById("div_home");
+             toShow.style.display = "block";
+         }
+
+         // Handle for creating a new share
+         function newShare1(ev) {
+             g_current_share = g_shares.length;
+             g_shares.push(g_threshold + g_id);
+             let link = document.createElement("a");
+             link.href = "#";
+             link.textContent = "";
+
+             let my_idx = g_current_share;
+// FIXME figure out closures here
+             link.addEventListener('click', function(ev) { alert(my_idx); g_current_share = my_idx; loadShare(ev); });
+             g_share_links.push(link);
+
+             if (g_shares.length == g_threshold) {
+                 document.getElementById("a_newshare").textContent = "New derived share";
+             }
+
+             let shareList = document.getElementById("div_sharelist")
+             shareList.insertBefore(link, ev.currentTarget);
+             shareList.insertBefore(document.createElement("br"), ev.currentTarget);
+
+             loadShare(ev);
+         }
+
+         // Logic to draw the main checksum worksheet and load a specific share's data
+         async function loadShare(ev) {
+console.log("**** ENTERENIG loadShare****");
+             hideAll();
+             let toShow = document.getElementById("div_shareedit");
+             toShow.style.display = "block";
+             refreshTable();
+             let idx = 0;
+             let sharedata = g_shares[g_current_share] + ""; // make a copy of the string
+console.log("Calling loadShare, data = " + sharedata);
+             for (inp of g_checksum_data_cells) {
+console.log("In loadShare (" + sharedata + "), idx " + idx + "  looking at cell " + inp.x + "," + inp.y);
+                 if (idx == sharedata.length) {
+console.log("In loadShare (" + sharedata + "), idx " + idx + " BREAKING");
+                     break;
+                 }
+                 updateValue(inp, sharedata[idx]);
+                 idx++;
+
+                 await sleep(200);
+             }
+         }
+
+         // Logic to draw the main checksum worksheet
+         function refreshTable(ev) {
+             let autofill = document.getElementById('i_autofill').value == "true";
+             let create = document.getElementById('i_create').value == "true";
+             let width = document.getElementById('i_size').value;
+             let checksum = checksums[document.getElementById('i_checksum').value];
+
+             clearCells();
+             // Draw HRP
+             for (let i = 0; i < checksum.hrp.length; i++) {
+                 placeCell(i, 0, checksum.hrp[i], "cell_hrp", false);
+             }
+
+             // Draw table except for last two lines
+             let hrp_reduction = gf32poly_modhrp(checksum.hrp.slice(0, -1), checksum.generator);
+             let y = 0;
+             for (let x = checksum.hrp.length; x < width; x++) {
+                 let x_offs = x - checksum.hrp.length - checksum.generator.length;
+                 if (x_offs >= 0 && x_offs % 2 == 0) {
+                     let reduction_value = "";
+                     for (let i = 0; i < checksum.generator.length; i++) {
+                         // Reduction row
+                         {
+                             let className = "cell_reduction";
+                             let changeAction = sumDown;
+                             if (y == 0) {
+                                 reduction_value = gf32_str(hrp_reduction[i]);
+                             }
+                             if (create && checksum.hrp.length + y + i >= width - checksum.generator.length) {
+                                 changeAction = sumUp;
+                             }
+                             placeCell(checksum.hrp.length + y + i, y + 1, reduction_value, className, !autofill, sumDown);
+                         }
+                         // Sum row
+                         {
+                             let className = "cell_sum";
+                             let changeAction = sumDown;
+                             if (create && checksum.hrp.length + y + i >= width - checksum.generator.length) {
+                                 className += " cell_pink";
+                                 changeAction = sumUp;
+                             }
+                             if (i < 2) changeAction = doResidue;
+
+                             placeCell(checksum.hrp.length + y + i, y + 2, "", className, !autofill, changeAction);
+                         }
+                     }
+                     y += 2;
+                 }
+
+                 if (create && x >= width - checksum.generator.length) {
+console.log("[0]Placing checksum cell " + x + "," + y);
+                     g_checksum_data_cells.push(placeCell(x, y, "", "cell_data cell_pink", !autofill));
+                 } else {
+console.log("[1]Placing checksum cell " + x + "," + y);
+                     g_checksum_data_cells.push(placeCell(x, y, "", "cell_data", true, autofill ? sumDown : null));
+                 }
+             }
+             // Draw last two lines (sum line and final residue)
+             for (let i = 0; i < checksum.generator.length; i++) {
+                 placeCell(checksum.hrp.length + y + i, y + 1, "", "cell_sum", !autofill, sumUp);
+                 let value = "";
+                 if (create) {
+                     value = checksum.residue[i];
+                 }
+                 placeCell(checksum.hrp.length + y + i, y + 2, value, "cell_residue", !create);
+             }
+         }
+
+         // Helper to place cells
+         function clearCells() {
+             let tab = document.getElementById('div_worksheet');
+             tab.textContent = "";
+             g_checksum_data_cells = [];
+         }
+
+         let cellMap = {};
+         function placeCell(x, y, value, klass, enabled, onchange = null) {
+             let cell = document.createElement("input");
+             cell.className = "cell " + klass;
+             cell.disabled = !enabled;
+             cell.maxLength = 1;
+             cell.addEventListener('change', function(ev) { correctCellValue(ev.currentTarget); });
+             if (onchange != null) {
+                 cell.addEventListener('change', function(ev) { onchange(ev.currentTarget); });
+             }
+             cell.value = value;
+             cell.x = x;
+             cell.y = y;
+             cellMap[[x, y]] = cell;
+
+             cell.style.left = (cellparams.width * cell.x + (cellparams.spacer * (cell.x / 4 | 0))) + "px";
+             cell.style.top = (cellparams.height * cell.y) + "px";
+
+             let tab = document.getElementById('div_worksheet');
+             tab.appendChild(cell);
+             return cell;
+         }
+
+         // Cell event handlers
+
+         // On every cell, force value to uppercase and flag errors
+         function correctCellValue(cell) {
+             cell.value = cell.value.toUpperCase();
+             if (gf32_parse(cell.value) == null) {
+                 cell.style.color = "red";
+                 setTimeout(function() { cell.style.color = "black"; }, 500);
+             }
+             // Update stored share
+             let share = "";
+// FIXME the order of iteration here seems to be weird somehow
+             for (inp of g_checksum_data_cells) {
+                 if (inp.value.length > 0) {
+                     share += inp.value;
+                 } else {
+                     share += " "; // stick a space into blank cells as a placeholder
+                 }
+             }
+console.log("Updated share to " + share);
+             g_shares[g_current_share] = share;
+             g_share_links[g_current_share].textContent = share.slice(0, 6);
+         }
+
+         // Helper to update a cell value
+         function updateValue(cell, val) {
+             if (cell.value != val) {
+console.log("updateValue cell " + cell.x + "," + cell.y + " to " + val + "  caller " + new Error("show me the stack"));
+console.log(new Error("show me the stack"));
+                 cell.value = val;
+                 cell.style.fontWeight = "bold";
+                 setTimeout(function() { cell.style.fontWeight = "normal"; }, 500);
+                 cell.dispatchEvent(new Event("change"));
+             } else {
+console.log("updateValue cell " + cell.x + "," + cell.y + " to " + val + "  (noop)");
+                 cell.style.color = "green";
+                 setTimeout(function() { cell.style.color = "black"; }, 500);
+             }
+         }
+
+
+         // from https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+         function sleep(ms) {
+             return new Promise(resolve => setTimeout(resolve, ms));
+         }
+
+         async function sumCells(cell, other, target) {
+             if (other == null || target == null) {
+                 return;
+             }
+
+             let value1 = gf32_parse(cell.value);
+             let value2 = gf32_parse(other.value);
+             if (value1 == null || value2 == null) {
+                 // If the sum failed because -this- cell was changed to an invalid
+                 // value, then blank out all the consequent squares.
+                 if (value1 == null) {
+console.log("blanking a cell");
+                     updateValue(target, "");
+                 }
+                 return;
+             }
+
+             await sleep (250);
+             updateValue(target, gf32_str(gf32_add(value1, value2)));
+         }
+
+         // When the value is updated, add it to the cell below (if one exists)
+         // and put the result in the cell two down
+         function sumDown(cell) {
+             let other = cell.y % 2 == 0 ? cellMap[[cell.x, cell.y + 1]] : cellMap[[cell.x, cell.y - 1]];
+             let target = cell.y % 2 == 0 ? cellMap[[cell.x, cell.y + 2]] : cellMap[[cell.x, cell.y + 1]];
+             sumCells(cell, other, target);
+         }
+
+         // When the value is updated, add it to the cell below (if one exists)
+         // and put the result in the cell above
+         function sumUp(cell) {
+             let other = cell.y % 2 == 0 ? cellMap[[cell.x, cell.y - 1]] : cellMap[[cell.x, cell.y + 1]];
+             let target = cell.y % 2 == 0 ? cellMap[[cell.x, cell.y - 2]] : cellMap[[cell.x, cell.y - 1]];
+             sumCells(cell, other, target);
+         }
+
+         // Attached to the leftmost cell in a sum-row. If both leftmost cells have values,
+         // compute their residue and fill in the next residue row
+         async function doResidue(cell) {
+             let checksum = checksums[document.getElementById('i_checksum').value];
+             let sib = cell.x % 2 == checksum.hrp.length % 2 ? cellMap[[cell.x + 1, cell.y]] : cellMap[[cell.x - 1, cell.y]];
+             let offset = cell.x % 2 == checksum.hrp.length % 2 ? 2 : 1;
+
+             let value1 = gf32_parse(cell.value);
+             let value2 = gf32_parse(sib.value);
+             if (value1 == null || value2 == null) {
+                 if (value1 == null) {
+                     for (let x = 0; x < residue.length; x++) {
+                         await sleep (50);
+                         updateValue(cellMap[[cell.x + offset + x, cell.y + 1]], "");
+                     }
+                 }
+                 return;
+             }
+
+             let chksum = [
+                 cell.x % 2 == checksum.hrp.length % 2 ? value1 : value2, 
+                 cell.x % 2 == checksum.hrp.length % 2 ? value2 : value1 
+             ];
+             for (let i = 0; i < checksum.generator.length; i++) {
+                 chksum.push(0);
+             }
+             residue = gf32poly_mod(chksum, checksum.generator);
+
+             for (let x = 0; x < residue.length; x++) {
+                 await sleep (50);
+                 updateValue(cellMap[[cell.x + offset + x, cell.y + 1]], gf32_str(residue[x]));
+             }
+         }
+
+         // Just forward an event to the cell to the left
+         function pokeLeft(cell) {
+             let ev = new Event("change");
+             cellMap[[cell.x - 1, cell.y]].dispatchEvent(ev);
+         }
+
+         // Just forward an event to the cell to the top
+         function pokeAbove(cell) {
+             let ev = new Event("change");
+             cellMap[[cell.x, cell.y - 1]].dispatchEvent(ev);
+         }
+      </script>
+    </div>
+</body>
+</html>

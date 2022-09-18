@@ -112,6 +112,8 @@ function createChecksumWorksheet(worksheet) {
          let x = 0;
          for (cell of row.cells) {
              let domInp = document.createElement("input");
+             domInp.id = cell.dom_id;
+             console.log("Adding cell <input> " + cell.dom_id);
              switch (cell.ty) {
              case "fixed_hrp":
                  console.assert(cell.val !== undefined);

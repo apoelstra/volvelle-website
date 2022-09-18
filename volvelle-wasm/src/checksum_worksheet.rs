@@ -17,7 +17,7 @@
 use crate::error::Error;
 use crate::fe;
 use serde::{Deserialize, Serialize};
-use std::{iter, ops};
+use std::ops;
 
 /// How to render a given cell
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
@@ -46,9 +46,10 @@ pub enum CellType {
 }
 
 /// A single cell of the checksum worksheet
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct Cell {
     ty: CellType,
+    dom_id: String,
     val: Option<char>,
 }
 
@@ -169,91 +170,128 @@ impl Worksheet {
         // Number of non-global-residue pairs of rows
         let n_rows = data_len / 2;
 
-        let mut offset = 0;
         // Treat first two rows specially
-        ret.rows.push(Row {
-            start_idx: 0,
-            cells: vec![],
-        });
-        ret.rows[0].cells.extend(ret.hrp.chars().map(|ch| Cell {
-            ty: CellType::FixedHrp,
-            val: Some(ch.to_ascii_uppercase()),
-        }));
-        ret.rows[0].cells.push(Cell {
-            ty: CellType::FixedHrp,
-            val: Some('1'),
-        });
-        ret.rows[0].cells.extend(
-            iter::repeat(Cell {
-                ty: CellType::ShareDataNonChecksum,
-                val: None,
-            })
-            .take(checksum.len()),
-        );
-
-        offset += ret.hrp.len() + 1;
-        ret.rows.push(Row {
-            start_idx: offset,
-            cells: vec![],
-        });
-        let hrp_poly = match checksum {
-            Checksum::Bech32 => fe::FePoly::bech32_hrp_residue(&ret.hrp),
-            Checksum::Codex32 => fe::FePoly::codex32_hrp_residue(&ret.hrp),
-        };
-        ret.rows[1].cells.extend(hrp_poly.iter().map(|fe| Cell {
-            ty: CellType::FixedResidue,
-            val: Some(fe.into()),
-        }));
+        let mut offset = ret.add_first_row();
+        ret.add_second_row(offset);
 
         // For the remaining rows except the global SECRETSHARE32 residue
         for _ in 1..n_rows {
-            ret.rows.push(Row {
-                start_idx: offset,
-                cells: vec![],
-            });
-            ret.rows.last_mut().unwrap().cells.extend(
-                iter::repeat(Cell {
-                    ty: CellType::Sum,
-                    val: None,
-                })
-                .take(checksum.len()),
-            );
-            ret.rows.last_mut().unwrap().cells.extend(
-                iter::repeat(Cell {
-                    ty: CellType::ShareDataNonChecksum,
-                    val: None,
-                })
-                .take(2),
-            );
-            offset += 2;
-
-            ret.rows.push(Row {
-                start_idx: offset,
-                cells: vec![],
-            });
-            ret.rows.last_mut().unwrap().cells.extend(
-                iter::repeat(Cell {
-                    ty: CellType::Residue,
-                    val: None,
-                })
-                .take(checksum.len()),
-            );
+            offset = ret.add_2nth_rows(offset);
         }
 
         // Finally stick the global residue row on
-        ret.rows.push(Row {
+        ret.add_final_row(offset);
+
+        Ok(ret)
+    }
+
+    /// Helper to populate the first row (HRP + checksum_len many data chars)
+    fn add_first_row(&mut self) -> usize {
+        assert_eq!(self.rows.len(), 0);
+        self.rows.push(Row {
+            start_idx: 0,
+            cells: vec![],
+        });
+        self.hrp.len();
+        for (n, ch) in self.hrp.chars().enumerate() {
+            self.rows[0].cells.push(Cell {
+                ty: CellType::FixedHrp,
+                dom_id: format!("inp_{}_{}", 0, n),
+                val: Some(ch),
+            });
+        }
+        self.rows[0].cells.push(Cell {
+            ty: CellType::FixedHrp,
+            dom_id: format!("inp_{}_{}", 0, self.hrp.len()),
+            val: Some('1'),
+        });
+        let offset = self.hrp.len() + 1;
+        for n in 0..self.checksum.len() {
+            self.rows[0].cells.push(Cell {
+                ty: CellType::ShareDataNonChecksum,
+                dom_id: format!("inp_{}_{}", 0, n + offset),
+                val: None,
+            });
+        }
+        offset
+    }
+
+    /// Helper to populate the second row (HRP residue) (does not change offset)
+    fn add_second_row(&mut self, offset: usize) {
+        assert_eq!(self.rows.len(), 1);
+        self.rows.push(Row {
             start_idx: offset,
             cells: vec![],
         });
-        ret.rows.last_mut().unwrap().cells.extend(
-            iter::repeat(Cell {
-                ty: CellType::GlobalResidue,
-                val: None,
-            })
-            .take(checksum.len()),
-        );
+        let hrp_poly = match self.checksum {
+            Checksum::Bech32 => fe::FePoly::bech32_hrp_residue(&self.hrp),
+            Checksum::Codex32 => fe::FePoly::codex32_hrp_residue(&self.hrp),
+        };
+        for (n, fe) in hrp_poly.iter().enumerate() {
+            self.rows[1].cells.push(Cell {
+                ty: CellType::FixedResidue,
+                dom_id: format!("inp_{}_{}", 1, n + offset),
+                val: Some(fe.into()),
+            });
+        }
+    }
 
-        Ok(ret)
+    /// Helper to populate the nth and (n+1)th "ordinary" rows (sum then residue)
+    fn add_2nth_rows(&mut self, mut offset: usize) -> usize {
+        let ridx = self.rows.len();
+
+        self.rows.push(Row {
+            start_idx: offset,
+            cells: vec![],
+        });
+        let row = self.rows.last_mut().unwrap();
+        for n in 0..self.checksum.len() {
+            row.cells.push(Cell {
+                ty: CellType::Sum,
+                dom_id: format!("inp_{}_{}", ridx, n + offset),
+                val: None,
+            });
+        }
+        for n in 0..2 {
+            row.cells.push(Cell {
+                ty: CellType::ShareDataNonChecksum,
+                dom_id: format!("inp_{}_{}", ridx, n + offset + self.checksum.len()),
+                val: None,
+            });
+        }
+        offset += 2;
+
+        self.rows.push(Row {
+            start_idx: offset,
+            cells: vec![],
+        });
+        let row = self.rows.last_mut().unwrap();
+        for n in 0..self.checksum.len() {
+            row.cells.push(Cell {
+                ty: CellType::Sum,
+                dom_id: format!("inp_{}_{}", ridx, n + offset),
+                val: None,
+            });
+        }
+        offset
+    }
+
+    fn add_final_row(&mut self, offset: usize) {
+        let ridx = self.rows.len();
+
+        self.rows.push(Row {
+            start_idx: offset,
+            cells: vec![],
+        });
+
+        let row = self.rows.last_mut().unwrap();
+        for n in 0..self.checksum.len() {
+            row.cells.push(Cell {
+                ty: CellType::GlobalResidue,
+                dom_id: format!("inp_{}_{}", ridx, n + offset),
+                val: None,
+            });
+        }
     }
 
     /// Returns the first six characters of the share, with `_`s for missign characters

@@ -96,6 +96,7 @@ async function newShare() {
         "session": g_session,
     });
     createChecksumWorksheet(g_session.shares[g_session.shares.length - 1]);
+     g_session.active_share = g_session.shares.length - 1;
     return;
 }
 
@@ -106,53 +107,93 @@ function createChecksumWorksheet(worksheet) {
      let tab = document.getElementById('div_worksheet');
      tab.textContent = "";
 
-     console.log(worksheet.rows);
      let y = 0;
      for (row of worksheet.rows) {
          let x = 0;
          for (cell of row.cells) {
              let domInp = document.createElement("input");
              domInp.id = cell.dom_id;
-             console.log("Adding cell <input> " + cell.dom_id);
+             domInp.disabled = true; // only a couple cell types are editable
+             domInp.value = cell.val || '';
              switch (cell.ty) {
+             case "symbol":
+                 console.assert(cell.val !== undefined);
+                 domInp.className = "cell cell_symbol";
+                 break;
              case "fixed_hrp":
                  console.assert(cell.val !== undefined);
                  domInp.className = "cell cell_hrp";
-                 domInp.disabled = true;
-                 domInp.value = cell.val;
                  break;
              case "fixed_residue":
                  console.assert(cell.val !== undefined);
                  domInp.className = "cell cell_residue";
-                 domInp.disabled = true;
-                 domInp.value = cell.val;
                  break;
-             case "share_data_non_checksum":
+             case "share_data":
                  domInp.className = "cell cell_data";
-                 domInp.value = cell.val || '';
+                 domInp.addEventListener("change", handleInputChange);
+                 domInp.disabled = false;
                  break;
              case "share_data_checksum":
-                 domInp.className = "cell cell_data";
-                 domInp.value = cell.val || '';
+                 domInp.className = "cell cell_data cell_pink";
                  break;
              case "residue":
                  domInp.className = "cell cell_residue";
-                 domInp.value = cell.val || '';
              case "sum":
                  domInp.className = "cell cell_sum";
-                 domInp.value = cell.val || '';
+                 break;
+             case "sum_checksum":
+                 domInp.className = "cell cell_sum cell_pink";
                  break;
              case "global_residue":
                  domInp.className = "cell cell_residue";
-                 domInp.value = cell.val || '';
              }
              domInp.style.left = (g_cellparams.width * (x + row.start_idx) + (g_cellparams.spacer * ((x + row.start_idx) / 4 | 0))) + "px";
              domInp.style.top = (g_cellparams.height * y) + "px";
-             domInp.maxWidth = 1;
+             domInp.maxLength = 1;
              tab.appendChild(domInp);
              x += 1;
          }
          y += 1;
      }
+}
+
+// Create a new, empty share, and switch to its checksum worksheet
+async function handleInputChange(ev) {
+    console.assert(g_session !== undefined);
+    ev.target.style.color = "black"; // first undo any red coloring that may be left
+    g_session = await postWorkerMessage({
+        "method": "handle_input_change",
+        "session": g_session,
+        "id": ev.target.id,
+        "val": ev.target.value,
+    });
+    actions = g_session.action_queue;
+    g_session.action_queue = [];
+    await doDomActions(actions);
+}
+
+async function doDomActions(actions) {
+    console.log(actions);
+    for (action of actions) {
+        let elem = document.getElementById(action.id);
+        switch(action.ty) {
+        case "flash_error":
+            elem.style.color = "red";
+            // setTimeout(function() { elem.style.color = "black"; }, 500); // actually don't change it back
+            break;
+        case "flash_set":
+            elem.value = action.value;
+            elem.style.color = "green";
+            setTimeout(function() { elem.style.color = "black"; }, 500);
+            break;
+        case "set":
+            elem.value = action.value;
+            elem.style.color = "white";
+            await sleep(50);
+            elem.style.color = "black";
+            setTimeout(function() { elem.style.color = "black"; }, 500);
+            break;
+        }
+    }
 }
 

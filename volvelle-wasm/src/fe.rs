@@ -18,12 +18,12 @@
 //!
 
 use serde::{Deserialize, Serialize};
-use std::{iter, ops};
+use std::{fmt, iter, ops};
 
 /// Needed for indexing as we need a static-lifetime zero object
 const ZERO: Fe = Fe(0);
 /// The bech32 alphabet, in binary order
-const BECH32_ALPHABET: &[u8] = b"QPZRY9X8GF2TVDW0S3JNS4KHCE6MUA7L";
+const BECH32_ALPHABET: &[u8] = b"QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L";
 /// The codex32 generator polynomial
 const CODEX32_POLYMOD: &[Fe] = &[
     Fe(25),
@@ -66,6 +66,12 @@ impl Fe {
 impl From<Fe> for char {
     fn from(fe: Fe) -> Self {
         BECH32_ALPHABET[fe.0 as usize].into()
+    }
+}
+
+impl fmt::Display for Fe {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        char::from(*self).fmt(f)
     }
 }
 
@@ -155,6 +161,15 @@ impl ops::Mul<&Fe> for Fe {
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize, Serialize)]
 pub struct FePoly(Vec<Fe>);
 
+impl fmt::Display for FePoly {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for ch in &self.0 {
+            char::from(*ch).fmt(f)?
+        }
+        Ok(())
+    }
+}
+
 impl From<Fe> for FePoly {
     fn from(fe: Fe) -> Self {
         FePoly(vec![fe])
@@ -213,16 +228,26 @@ impl FePoly {
         self.polymod(&BECH32_POLYMOD)
     }
 
+    /// Shift the polynomial left a number of spaces
+    pub fn mul_by_x(&mut self, n: usize) {
+        self.0.extend(iter::repeat(Fe(0)).take(n));
+    }
+
+    /// Shift the polynomial left by one and add a new element
+    pub fn mul_by_x_then_add(&mut self, fe: Fe) {
+        self.0.push(fe);
+    }
+
     /// Convert a HRP into a polynomial
     fn hrp_residue(s: &str, modulus: &[Fe]) -> Self {
         let mut poly_1 = Vec::with_capacity(s.len() * 2 + modulus.len() + 2);
         poly_1.push(Fe(1));
         for ch in s.bytes() {
-            poly_1.push(Fe(ch >> 5));
+            poly_1.push(Fe(ch.to_ascii_lowercase() >> 5));
         }
         poly_1.push(Fe(0));
         for ch in s.bytes() {
-            poly_1.push(Fe(ch & 0x1f));
+            poly_1.push(Fe(ch.to_ascii_lowercase() & 0x1f));
         }
         poly_1.extend(iter::repeat(Fe(0)).take(modulus.len()));
         FePoly(poly_1).polymod(modulus)
@@ -241,5 +266,33 @@ impl FePoly {
     /// Return an iterator over the coefficients of the polynomial
     pub fn iter(&self) -> impl Iterator<Item = Fe> + '_ {
         self.0.iter().copied()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn polymod() {
+        assert_eq!(
+            FePoly::codex32_hrp_residue("ms").to_string(),
+            "33XW87RR3YLJG"
+        );
+        assert_eq!(
+            FePoly::codex32_hrp_residue("MS").to_string(),
+            "33XW87RR3YLJG"
+        );
+    }
+
+    #[test]
+    fn rtt_fe() {
+        for ch in "ACDEFGHJKLMNPQRSTUVWXYZ0234567890".chars() {
+            assert_eq!(ch, Fe::try_from(ch).unwrap().into());
+        }
+
+        for n in 0..32 {
+            assert_eq!(Fe(n), Fe::try_from(char::from(Fe(n))).unwrap());
+        }
     }
 }

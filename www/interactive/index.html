@@ -84,16 +84,6 @@
         };
         document.body.removeChild(dummy); // you didn't see nothin
 
-         // Attach handlers to all the config dropdowns
-         function setup1() {
-             for (let inp of document.getElementsByTagName("select")) {
-                 inp.addEventListener('change', refreshTable);
-             }
-             document.getElementById("a_newshare").addEventListener('click', newShare);
-             document.getElementById("a_home").addEventListener('click', showHome);
-             document.getElementById("i_k").addEventListener('change', changeThreshold);
-         }
-
          let g_threshold = "0";
          let g_id = "NAME";
          let g_shares = [];
@@ -101,24 +91,6 @@
          let g_current_share = 0;
          let g_checksum_data_cells = [];
          // Handler for changing the global threshold value
-         function changeThreshold(ev) {
-             if (ev.currentTarget.value != g_threshold && g_shares.length > 0) {
-                 if (confirm("Are you sure? Changing the threshold value will delete all of your shares.")) {
-                     g_shares = [];
-                     g_current_share = 0;
-                     let newShareA = document.getElementById("a_newshare");
-                     newShareA.textContent = "New initial share";
-
-                     let sharelist = document.getElementById("div_sharelist");
-                     sharelist.textContent = "";
-                     sharelist.appendChild(newShareA);
-                 } else {
-                     ev.currentTarget.value = g_threshold;
-                     return false;
-                 }
-             }
-             g_threshold = ev.currentTarget.value;
-         }
 
          function hideAll(ev) {
              document.getElementById("div_home").style.display = "none";

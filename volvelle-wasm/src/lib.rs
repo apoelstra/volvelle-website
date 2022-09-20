@@ -15,6 +15,7 @@
 //! Volvelle Website (rust-wasm support code)
 
 mod checksum_worksheet;
+mod dom_action;
 mod error;
 mod fe;
 
@@ -36,6 +37,8 @@ pub fn new_session(
         size,
         checksum,
         shares: vec![],
+        active_share: None,
+        action_queue: vec![],
     })
     .map_err(From::from)
 }
@@ -44,6 +47,15 @@ pub fn new_session(
 pub fn new_share(session: JsValue) -> Result<JsValue, JsError> {
     let mut session: Session = serde_wasm_bindgen::from_value(session)?;
     session.new_share()?;
+    serde_wasm_bindgen::to_value(&session).map_err(From::from)
+}
+
+#[wasm_bindgen]
+pub fn handle_input_change(session: JsValue, id: &str, val: &str) -> Result<JsValue, JsError> {
+    let mut session: Session = serde_wasm_bindgen::from_value(session)?;
+    if let Some(idx) = session.active_share {
+        session.action_queue = session.shares[idx].handle_input_change(id, val)?;
+    }
     serde_wasm_bindgen::to_value(&session).map_err(From::from)
 }
 
@@ -56,13 +68,16 @@ pub struct Session {
     size: usize,
     checksum: checksum_worksheet::Checksum,
     shares: Vec<checksum_worksheet::Worksheet>,
+    active_share: Option<usize>,
+    /// Only set when returning a session from a "handle event"-type call
+    action_queue: Vec<dom_action::Action>,
 }
 
 impl Session {
     /// Adds a share to a session
     pub fn new_share(&mut self) -> Result<(), Error> {
         let new = checksum_worksheet::Worksheet::new(
-            self.hrp.clone(),
+            &self.hrp,
             checksum_worksheet::CreateMode::Create,
             self.size,
             self.checksum,

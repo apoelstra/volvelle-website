@@ -162,3 +162,8 @@ H2 {
 .cell_pink {
     background-color: #faf;
 }
+
+.cell_symbol {
+    border-color: white;
+    font-weight: bold;
+}

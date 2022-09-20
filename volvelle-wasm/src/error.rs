@@ -18,10 +18,28 @@ use serde::{Deserialize, Serialize};
 use std::{error, fmt};
 
 /// The main error type for the whole crate
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub enum Error {
-    OddLength { data_len: usize },
-    TooShort { minimum: usize, actual: usize },
+    OddLength {
+        data_len: usize,
+    },
+    TooShort {
+        minimum: usize,
+        actual: usize,
+    },
+    UnknownCell {
+        id: String,
+        reason: &'static str,
+    },
+    InvalidRow {
+        row: usize,
+        n_rows: usize,
+    },
+    InvalidCell {
+        row: usize,
+        cell: usize,
+        n_cells: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -39,6 +57,19 @@ impl fmt::Display for Error {
                     f,
                     "Share size is {} but HRP+checksum need size {}",
                     actual, minimum
+                )
+            }
+            Error::UnknownCell { ref id, reason } => {
+                write!(f, "Unknown cell id {} ({})", id, reason)
+            }
+            Error::InvalidRow { row, n_rows } => {
+                write!(f, "Invalid row {} (have {} rows)", row, n_rows)
+            }
+            Error::InvalidCell { row, cell, n_cells } => {
+                write!(
+                    f,
+                    "Invalid cell {} (row {} has {} cells)",
+                    cell, row, n_cells
                 )
             }
         }

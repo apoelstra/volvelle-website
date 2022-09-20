@@ -1,6 +1,6 @@
 
 importScripts('../pkg/volvelle_wasm.js')
-const {new_session, new_share} = wasm_bindgen;
+const {handle_input_change, new_session, new_share} = wasm_bindgen;
 
 // Response to a message from the main thread, which will contain
 // at least two fields:
@@ -23,6 +23,13 @@ onmessage = async function(e) {
 
     if (e.data.method === "new_share") {
         let result = new_share(e.data.session);
+        result.nonce = e.data.nonce;
+        postMessage(result);
+        return;
+    }
+
+    if (e.data.method === "handle_input_change") {
+        let result = handle_input_change(e.data.session, e.data.id, e.data.val);
         result.nonce = e.data.nonce;
         postMessage(result);
         return;

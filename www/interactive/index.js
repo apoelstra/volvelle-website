@@ -120,16 +120,18 @@ console.log(cells);
 }
 
 // Create a new, empty share, and switch to its checksum worksheet
+let g_actions = [];
 async function handleInputChange(ev) {
     console.assert(g_session !== undefined);
     ev.target.style.color = "black"; // first undo any red coloring that may be left
 
+    g_actions = [
+        ...g_actions,
+        ...g_session.handle_input_change(ev.target.id, ev.target.value),
+    ];
     let interval;
-    let actions = g_session.handle_input_change(ev.target.id, ev.target.value);
-console.log(actions);
     interval = setInterval(() => {
-        const action = actions.shift();
-console.log(action);
+        const action = g_actions.shift();
         if (action === undefined) {
             clearInterval(interval);
             return;

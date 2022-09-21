@@ -26,9 +26,9 @@ use wasm_bindgen::prelude::*;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Session {
     hrp: String,
-    threshold: usize,
-    size: usize,
-    checksum: Checksum,
+    pub threshold: usize,
+    pub size: usize,
+    pub checksum: Checksum,
     shares: Vec<checksum_worksheet::Worksheet>,
     active_share: Option<usize>,
 }
@@ -45,6 +45,19 @@ impl Session {
             shares: vec![],
             active_share: None,
         }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn hrp(&self) -> String {
+        self.hrp.clone()
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_hrp(&mut self, s: String) {
+        self.hrp = s;
+    }
+
+    pub fn n_shares(&self) -> usize {
+        self.shares.len()
     }
 
     /// Adds a share to a session

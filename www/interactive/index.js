@@ -43,7 +43,7 @@ async function updateGlobalParams() {
      console.assert(g_session !== undefined);
      console.assert(globalParamsChanged()); // button should've been disabled otherwise
 
-     if (g_shares.length == 0 || confirm("Updating global parameters will erase all shares! Are you sure?")) {
+     if (g_session.n_shares() == 0 || confirm("Updating global parameters will erase all shares! Are you sure?")) {
          document.getElementById("bt_update").disabled = true;
          document.getElementById("bt_cancel").disabled = true;
          return new_session();

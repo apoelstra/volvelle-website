@@ -194,6 +194,7 @@ impl ops::Index<usize> for Poly {
 }
 
 impl Poly {
+    /*
     /// Helper function that drops any leading 0s from the polynomial
     fn normalize(&mut self) {
         let mut seen_nonzero = false;
@@ -204,10 +205,11 @@ impl Poly {
             seen_nonzero
         });
     }
+    */
 
     /// Reduce a polynomial modulo the codex32 generator polynomial
     fn polymod(&self, modulus: &[Fe]) -> Self {
-        let mut ret = vec![Fe(0); 13];
+        let mut ret = vec![Fe(0); modulus.len()];
 
         for ch in &self.0 {
             // Multiply residue by x
@@ -216,16 +218,15 @@ impl Poly {
                 ret[i] = ret[i + 1];
             }
             // Add next character
-            ret[12] = *ch;
+            ret[modulus.len() - 1] = *ch;
             // Replace A*x^13 by A*polymod
             for i in 0..modulus.len() {
                 ret[i] = ret[i] + c13 * modulus[i];
             }
         }
 
-        let mut ret = Poly(ret);
-        ret.normalize();
-        ret
+        // ret.normalize(); // Don't normalize!! We need to keep trailing 0s.
+        Poly(ret)
     }
 
     /// Reduce a polynomial modulo the codex32 generator polynomial
@@ -287,6 +288,13 @@ mod tests {
     fn polymod() {
         assert_eq!(Poly::codex32_hrp_residue("ms").to_string(), "33XW87RR3YLJG");
         assert_eq!(Poly::codex32_hrp_residue("MS").to_string(), "33XW87RR3YLJG");
+        assert_eq!(Poly::bech32_hrp_residue("ms").to_string(), "69EXR9");
+
+        let mut zg = Poly::from(Fe(2));
+        zg.mul_by_x_then_add(Fe(8));
+        zg.mul_by_x(6);
+        assert_eq!(zg.to_string(), "ZGQQQQQQ");
+        assert_eq!(zg.bech32_polymod().to_string(), "Q863G3");
     }
 
     #[test]

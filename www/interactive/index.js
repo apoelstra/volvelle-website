@@ -123,13 +123,18 @@ console.log(cells);
 async function handleInputChange(ev) {
     console.assert(g_session !== undefined);
     ev.target.style.color = "black"; // first undo any red coloring that may be left
-    const actions = g_session.handle_input_change(ev.target.id, ev.target.value);
-    await doDomActions(actions);
-}
 
-async function doDomActions(actions) {
-    console.log(actions);
-    for (action of actions) {
+    let interval;
+    let actions = g_session.handle_input_change(ev.target.id, ev.target.value);
+console.log(actions);
+    interval = setInterval(() => {
+        const action = actions.shift();
+console.log(action);
+        if (action === undefined) {
+            clearInterval(interval);
+            return;
+        }
+
         let elem = document.getElementById(action.id);
         switch(action.ty) {
         case "flash_error":
@@ -139,16 +144,14 @@ async function doDomActions(actions) {
         case "flash_set":
             elem.value = action.value;
             elem.style.color = "green";
-            setTimeout(function() { elem.style.color = "black"; }, 500);
+            setTimeout(() => { elem.style.color = "black"; }, 500);
             break;
         case "set":
             elem.value = action.value;
-            elem.style.color = "white";
-            await sleep(50);
-            elem.style.color = "black";
-            setTimeout(function() { elem.style.color = "black"; }, 500);
+            elem.style.fontWeight = "bold";
+            setTimeout(() => { elem.style.fontWeight = "normal"; }, 500);
             break;
         }
-    }
+    }, 20);
 }
 

@@ -305,8 +305,7 @@ impl Worksheet {
         for n in 0..self.checksum.len() {
             row.cells.push(Cell {
                 ty: CellType::Residue,
-                is_checksum: self.hrp.len() + 1 + offset + self.checksum.len() + n
-                    >= self.size - self.checksum.len(),
+                is_checksum: self.hrp.len() + 3 + offset + n >= self.size - self.checksum.len(),
                 dom_id: format!("inp_{}_{}", ridx + 1, n),
                 val: None,
             });
@@ -660,7 +659,7 @@ mod tests {
         assert!(worksheet.handle_input_change("inp_0_11", "c").is_ok());
         assert!(worksheet.handle_input_change("inp_0_12", "c").is_ok());
 
-        assert!(worksheet.handle_input_change("inp_2_13", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_2_13", "c").is_ok()); // move this berofe 1414
         assert!(worksheet.handle_input_change("inp_2_14", "c").is_ok());
         assert!(worksheet.handle_input_change("inp_4_13", "c").is_ok());
         assert!(worksheet.handle_input_change("inp_4_14", "c").is_ok());
@@ -680,7 +679,42 @@ mod tests {
         assert!(worksheet.handle_input_change("inp_18_14", "c").is_ok());
         assert!(worksheet.handle_input_change("inp_20_13", "c").is_ok());
 
+        assert_eq!(worksheet.rows[20].cells[14].val.map(From::from), Some('D'));
+        assert_eq!(worksheet.rows[22].cells[13].val.map(From::from), Some('C'));
+        assert_eq!(worksheet.rows[22].cells[14].val.map(From::from), Some('N'));
+        assert_eq!(worksheet.rows[24].cells[13].val.map(From::from), Some('Q'));
+        assert_eq!(worksheet.rows[24].cells[14].val.map(From::from), Some('4'));
+        assert_eq!(worksheet.rows[26].cells[13].val.map(From::from), Some('0'));
+        assert_eq!(worksheet.rows[26].cells[14].val.map(From::from), Some('P'));
+        assert_eq!(worksheet.rows[28].cells[13].val.map(From::from), Some('D'));
+        assert_eq!(worksheet.rows[28].cells[14].val.map(From::from), Some('U'));
+        assert_eq!(worksheet.rows[30].cells[13].val.map(From::from), Some('Y'));
+        assert_eq!(worksheet.rows[30].cells[14].val.map(From::from), Some('9'));
+        assert_eq!(worksheet.rows[32].cells[13].val.map(From::from), Some('7'));
+        assert_eq!(worksheet.rows[32].cells[14].val.map(From::from), Some('M'));
+
         assert_eq!(worksheet.cell_below(2, 15), Some((3, 13)));
         assert_eq!(worksheet.cell_below(3, 13), Some((4, 13)));
+    }
+
+    #[test]
+    fn minimal_bech32() {
+        let mut worksheet = Worksheet::new("ms", CreateMode::Create, 17, Checksum::Bech32).unwrap();
+        assert!(worksheet.handle_input_change("inp_0_0", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_0_1", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_0_2", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_0_3", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_0_4", "c").is_ok());
+
+        assert!(worksheet.handle_input_change("inp_2_6", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_2_7", "c").is_ok());
+        assert!(worksheet.handle_input_change("inp_0_5", "c").is_ok());
+
+        assert_eq!(worksheet.rows[4].cells[6].val.map(From::from), Some('5'));
+        assert_eq!(worksheet.rows[4].cells[7].val.map(From::from), Some('J'));
+        assert_eq!(worksheet.rows[6].cells[6].val.map(From::from), Some('3'));
+        assert_eq!(worksheet.rows[6].cells[7].val.map(From::from), Some('C'));
+        assert_eq!(worksheet.rows[8].cells[6].val.map(From::from), Some('G'));
+        assert_eq!(worksheet.rows[8].cells[7].val.map(From::from), Some('S'));
     }
 }

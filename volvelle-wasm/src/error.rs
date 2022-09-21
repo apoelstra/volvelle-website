@@ -14,11 +14,10 @@
 
 //! Error
 
-use serde::{Deserialize, Serialize};
 use std::{error, fmt};
 
 /// The main error type for the whole crate
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Error {
     OddLength {
         data_len: usize,

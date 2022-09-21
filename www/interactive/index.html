@@ -7,7 +7,8 @@
   <meta http-equiv="keywords" content="volvelles,paper,computers,shamir,ssss,codex32,bitcoin" />
   <link rel="stylesheet" href="../main.css" type="text/css" />
   <title>Codex32: An Illustrated Secret Sharing Guide</title>
-  <script src='./dom.js'></script>
+  <script src='../pkg/volvelle_wasm.js'></script>
+  <script src='./index.js'></script>
 </head>
 <body onload="new_session()">
     <div id="title">
@@ -31,8 +32,8 @@
         </tr><tr>
         <td style="text-align: right"><label for="i_checksum">Checksum: </label></td>
         <td><select id="i_checksum" name="i_checksum" onchange="selectGlobalParams()">
-          <option value="codex32">codex32</option>
-          <option value="bech32">bech32</option>
+          <option value="0">codex32</option>
+          <option value="1">bech32</option>
         </select></td>
         </tr><tr>
         <td style="text-align: right"><label for="i_size">Share Size: </label></td>
@@ -61,7 +62,7 @@
         </tr></table>
         <h1>Shares</h1>
         <div id="div_sharelist">
-          <a id="a_newshare" href="#" onclick="newShare()">New initial share</a><br />
+          <a id="a_newshare" href="#" onclick="newInitialShare()">New initial share</a><br />
         </div>
       </div>
 

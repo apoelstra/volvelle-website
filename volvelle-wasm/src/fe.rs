@@ -17,8 +17,18 @@
 //! Functionality to compute the codex32 error-correcting code, do field arithmetic, etc
 //!
 
-use serde::{Deserialize, Serialize};
+#![allow(clippy::suspicious_arithmetic_impl)] // Clippy is retarded
+
 use std::{fmt, iter, ops};
+use wasm_bindgen::prelude::*;
+
+/// The checksums we support
+#[wasm_bindgen]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Checksum {
+    Codex32 = 0,
+    Bech32 = 1,
+}
 
 /// Needed for indexing as we need a static-lifetime zero object
 const ZERO: Fe = Fe(0);
@@ -44,7 +54,7 @@ const CODEX32_POLYMOD: &[Fe] = &[
 const BECH32_POLYMOD: &[Fe] = &[Fe(29), Fe(22), Fe(20), Fe(21), Fe(29), Fe(18)];
 
 /// A single field element in the bech32 field
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Fe(u8);
 
 impl Fe {
@@ -158,10 +168,10 @@ impl ops::Mul<&Fe> for Fe {
 }
 
 /// A polynomial in the bech32 field
-#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize, Serialize)]
-pub struct FePoly(Vec<Fe>);
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Poly(Vec<Fe>);
 
-impl fmt::Display for FePoly {
+impl fmt::Display for Poly {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for ch in &self.0 {
             char::from(*ch).fmt(f)?
@@ -170,20 +180,20 @@ impl fmt::Display for FePoly {
     }
 }
 
-impl From<Fe> for FePoly {
+impl From<Fe> for Poly {
     fn from(fe: Fe) -> Self {
-        FePoly(vec![fe])
+        Poly(vec![fe])
     }
 }
 
-impl ops::Index<usize> for FePoly {
+impl ops::Index<usize> for Poly {
     type Output = Fe;
     fn index(&self, idx: usize) -> &Fe {
         self.0.get(idx).unwrap_or(&ZERO)
     }
 }
 
-impl FePoly {
+impl Poly {
     /// Helper function that drops any leading 0s from the polynomial
     fn normalize(&mut self) {
         let mut seen_nonzero = false;
@@ -213,19 +223,19 @@ impl FePoly {
             }
         }
 
-        let mut ret = FePoly(ret);
+        let mut ret = Poly(ret);
         ret.normalize();
         ret
     }
 
     /// Reduce a polynomial modulo the codex32 generator polynomial
     pub fn codex32_polymod(&self) -> Self {
-        self.polymod(&CODEX32_POLYMOD)
+        self.polymod(CODEX32_POLYMOD)
     }
 
     /// Reduce a polynomial modulo the bech32 generator polynomial
     pub fn bech32_polymod(&self) -> Self {
-        self.polymod(&BECH32_POLYMOD)
+        self.polymod(BECH32_POLYMOD)
     }
 
     /// Shift the polynomial left a number of spaces
@@ -250,17 +260,17 @@ impl FePoly {
             poly_1.push(Fe(ch.to_ascii_lowercase() & 0x1f));
         }
         poly_1.extend(iter::repeat(Fe(0)).take(modulus.len()));
-        FePoly(poly_1).polymod(modulus)
+        Poly(poly_1).polymod(modulus)
     }
 
     /// Convert a HRP into a polynomial residue (codex32)
     pub fn codex32_hrp_residue(s: &str) -> Self {
-        FePoly::hrp_residue(s, &CODEX32_POLYMOD)
+        Poly::hrp_residue(s, CODEX32_POLYMOD)
     }
 
     /// Convert a HRP into a polynomial residue (bech32)
     pub fn bech32_hrp_residue(s: &str) -> Self {
-        FePoly::hrp_residue(s, &BECH32_POLYMOD)
+        Poly::hrp_residue(s, BECH32_POLYMOD)
     }
 
     /// Return an iterator over the coefficients of the polynomial
@@ -275,14 +285,8 @@ mod tests {
 
     #[test]
     fn polymod() {
-        assert_eq!(
-            FePoly::codex32_hrp_residue("ms").to_string(),
-            "33XW87RR3YLJG"
-        );
-        assert_eq!(
-            FePoly::codex32_hrp_residue("MS").to_string(),
-            "33XW87RR3YLJG"
-        );
+        assert_eq!(Poly::codex32_hrp_residue("ms").to_string(), "33XW87RR3YLJG");
+        assert_eq!(Poly::codex32_hrp_residue("MS").to_string(), "33XW87RR3YLJG");
     }
 
     #[test]

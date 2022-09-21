@@ -611,7 +611,7 @@ impl Worksheet {
                         id: self.rows[below2.0].cells[below2.1].dom_id.clone(),
                         value: Some(fe3.into()),
                     });
-                    queue.push_back((below2.0, below2.1));
+                    queue.push_front((below2.0, below2.1));
                 }
                 CellPos::SumChecksum => {
                     // For sum cells, we try to add to the cell above
@@ -631,7 +631,7 @@ impl Worksheet {
                         id: self.rows[above2.0].cells[above2.1].dom_id.clone(),
                         value: Some(fe3.into()),
                     });
-                    queue.push_back((above2.0, above2.1));
+                    queue.push_front((above2.0, above2.1));
                 }
                 CellPos::Residue => {
                     // Residue cells are very similar to sum cells
@@ -652,7 +652,7 @@ impl Worksheet {
                         id: self.rows[below.0].cells[below.1].dom_id.clone(),
                         value: Some(fe3.into()),
                     });
-                    queue.push_back((below.0, below.1));
+                    queue.push_front((below.0, below.1));
                 }
                 CellPos::ResidueChecksum => {
                     // Residue cells are very similar to sum cells

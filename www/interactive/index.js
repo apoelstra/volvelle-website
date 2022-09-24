@@ -128,13 +128,13 @@ function createChecksumWorksheet(idx, cells) {
     table.style.height = (g_cellparams.height * max_y + 60) + "px";
     document.getElementById('div_content').appendChild(table);
 
-/*
     let share_link = document.createElement("a");
-    share_link.appendChild(document.createTextNode("Share"));
+    share_link.textContent = "Share ______";
     share_link.href = "#";
-    share_link.addEventListener("click", () => { showDiv("div_home"); });
-    table.appendChild(home_link);
-*/
+    share_link.addEventListener("click", () => { showDiv("div_worksheet_" + idx); });
+    share_link.id = "a_worksheet_" + idx;
+    document.getElementById("div_sharelist").appendChild(share_link);
+    document.getElementById("div_sharelist").appendChild(document.createElement("br"));
 }
 
 // Process any actions needed to update the worksheet
@@ -146,10 +146,18 @@ async function handleInputChange(ev) {
     console.assert(g_session !== undefined);
     ev.target.style.color = "black"; // first undo any red coloring that may be left
 
+    // Update sheet and get list of consquent actions
     g_actions = [
         ...g_actions,
         ...g_session.handle_input_change(ev.target.id, ev.target.value),
     ];
+
+    // Update link text on home page
+    let idx = g_session.get_idx_of(ev.target.id);
+    let header_str = g_session.get_checksum_worksheet_header_str(idx);
+    document.getElementById("a_worksheet_" + idx).textContent = "Share " + header_str;
+
+    // Execute all the actions
     processActions();
 }
 
@@ -189,6 +197,7 @@ function showDiv(id) {
 
     let to_show = document.getElementById(id);
     to_show.style.display = "block";
-    document.getElementById('div_content').style.height = (to_show.offsetHeight + 15) + "px";
+    // Do this in a settimeout to avoid angsty "forced reflow took XXms" warnings
+    setTimeout(() => {  document.getElementById('div_content').style.height = (to_show.offsetHeight + 15) + "px"; }, 0);
 }
 

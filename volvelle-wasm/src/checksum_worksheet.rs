@@ -540,12 +540,7 @@ impl Worksheet {
             "______".into()
         } else {
             let mut ret = String::with_capacity(6);
-            let iter = self.rows[0]
-                .cells
-                .iter()
-                .skip(self.hrp.len())
-                .map(|cell| cell.val)
-                .take(6);
+            let iter = self.rows[0].cells.iter().map(|cell| cell.val).take(6);
             for fe in iter {
                 ret.push(fe.map(From::from).unwrap_or('_'));
             }
@@ -621,11 +616,15 @@ mod tests {
     fn minimal_bech32() {
         let mut worksheet =
             Worksheet::new("ms", CreateMode::Create, 17, Checksum::Bech32, 0).unwrap();
+        assert_eq!(worksheet.header_str(), "______");
         assert!(worksheet.handle_input_change(0, 0, "c").is_ok());
+        assert_eq!(worksheet.header_str(), "C_____");
         assert!(worksheet.handle_input_change(0, 1, "c").is_ok());
+        assert_eq!(worksheet.header_str(), "CC____");
         assert!(worksheet.handle_input_change(0, 2, "c").is_ok());
         assert!(worksheet.handle_input_change(0, 3, "c").is_ok());
         assert!(worksheet.handle_input_change(0, 4, "c").is_ok());
+        assert_eq!(worksheet.header_str(), "CCCCC_");
 
         assert!(worksheet.handle_input_change(2, 6, "c").is_ok());
         assert!(worksheet.handle_input_change(2, 7, "c").is_ok());

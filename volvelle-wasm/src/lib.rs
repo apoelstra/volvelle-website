@@ -74,7 +74,7 @@ impl Session {
     }
 
     /// Gets the list of cells to build a checksum worksheet from
-    pub fn get_checksum_worksheet_cells(&mut self, idx: usize) -> Result<js_sys::Array, JsError> {
+    pub fn get_checksum_worksheet_cells(&self, idx: usize) -> Result<js_sys::Array, JsError> {
         let share = self
             .shares
             .get(idx)
@@ -85,6 +85,20 @@ impl Session {
         share
             .get_dom_cells()
             .map(|vec| vec.into_iter().map(JsValue::from).collect())
+    }
+
+    /// Gets the list of cells to build a checksum worksheet from
+    pub fn get_checksum_worksheet_header_str(&self, idx: usize) -> Result<String, JsError> {
+        let share = self
+            .shares
+            .get(idx)
+            .ok_or_else(|| JsError::new("get_checksum_worksheet_cells: bad active share idx"))?;
+        Ok(share.header_str())
+    }
+
+    /// Extracts the share index from an input ID
+    pub fn get_idx_of(&self, id: &str) -> Result<usize, JsError> {
+        Ok(cell_from_name(id)?[0])
     }
 
     /// Responds to a user update of a cell by updating the state of the sheet

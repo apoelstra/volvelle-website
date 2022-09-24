@@ -10,6 +10,15 @@ let g_session;
 
 // Construct a new session from the user's current choice of global parameters
 async function new_session() {
+    if (typeof WebAssembly !== "object") {
+        alert(
+            "You appear to have webassembly disabled (e.g. you are using an iPhone in Lockdown Mode). "
+            + "The interactive features of this site will not work for you, sorry. Since you are so "
+            + "security-minded I'm sure you will not be too put out to have to use the paper version."
+        );
+    }
+    // Don't bother exiting or anything, just try to load the site and crash&burn if we will
+
     await init_wasm();
 
     g_session = new Session(

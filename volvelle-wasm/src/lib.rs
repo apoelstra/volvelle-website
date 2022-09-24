@@ -18,6 +18,7 @@ mod checksum_worksheet;
 mod error;
 mod fe;
 
+use crate::error::Error;
 use crate::fe::Checksum;
 use wasm_bindgen::prelude::*;
 
@@ -30,7 +31,6 @@ pub struct Session {
     pub size: usize,
     pub checksum: Checksum,
     shares: Vec<checksum_worksheet::Worksheet>,
-    active_share: Option<usize>,
 }
 
 #[wasm_bindgen]
@@ -43,7 +43,6 @@ impl Session {
             size,
             checksum,
             shares: vec![],
-            active_share: None,
         }
     }
 
@@ -62,31 +61,20 @@ impl Session {
 
     /// Adds a share to a session
     pub fn new_share(&mut self) -> Result<usize, JsError> {
+        let idx = self.shares.len();
         let new = checksum_worksheet::Worksheet::new(
             &self.hrp,
             checksum_worksheet::CreateMode::Create,
             self.size,
             self.checksum,
+            idx,
         )?;
         self.shares.push(new);
-        Ok(self.shares.len() - 1)
-    }
-
-    /// Activates a specific share
-    pub fn set_active_share(&mut self, idx: usize) {
-        self.active_share = Some(idx);
-    }
-
-    /// De-activates any share
-    pub fn clear_active_share(&mut self) {
-        self.active_share = None;
+        Ok(idx)
     }
 
     /// Gets the list of cells to build a checksum worksheet from
-    pub fn get_checksum_worksheet_cells(&mut self) -> Result<js_sys::Array, JsError> {
-        let idx = self
-            .active_share
-            .ok_or_else(|| JsError::new("get_checksum_worksheet_cells: no active share"))?;
+    pub fn get_checksum_worksheet_cells(&mut self, idx: usize) -> Result<js_sys::Array, JsError> {
         let share = self
             .shares
             .get(idx)
@@ -103,19 +91,66 @@ impl Session {
     ///
     /// Returns a list of updated cells for the JS to update the DOM with
     pub fn handle_input_change(&mut self, id: &str, val: &str) -> Result<js_sys::Array, JsError> {
-        let idx = self
-            .active_share
-            .ok_or_else(|| JsError::new("handle_input_change: no active share"))?;
+        let id = cell_from_name(id)?;
+
         let share = self
             .shares
-            .get_mut(idx)
+            .get_mut(id[0])
             .ok_or_else(|| JsError::new("handle_input_change: bad active share idx"))?;
         // FIXME this conversion is inefficient and ought to be unnecessary but
         // if we directly create a js_sys::Array in get_dom_cells then our unit
         // tests break
         share
-            .handle_input_change(id, val)
+            .handle_input_change(id[1], id[2], val)
             .map(|vec| vec.into_iter().map(JsValue::from).collect())
             .map_err(From::from)
+    }
+}
+
+/// Helper function to translate a cell ID into a shareidx/row/cell index tuple
+fn cell_from_name(s: &str) -> Result<[usize; 3], Error> {
+    use std::str::FromStr;
+    let mut iter = s.split('_');
+    if iter.next() != Some("inp") {
+        return Err(Error::UnknownCell {
+            id: s.into(),
+            reason: "no inp_ prefix",
+        });
+    }
+    let mut ret = [0; 3];
+    for i in 0..3 {
+        let ns = iter.next().ok_or_else(|| Error::UnknownCell {
+            id: s.into(),
+            reason: "missing number",
+        })?;
+        ret[i] = usize::from_str(ns).map_err(|_| Error::UnknownCell {
+            id: s.into(),
+            reason: "bad number",
+        })?;
+    }
+    if iter.next().is_none() {
+        Ok(ret)
+    } else {
+        Err(Error::UnknownCell {
+            id: s.into(),
+            reason: "extra numbers",
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cell_from_name() {
+        assert_eq!(cell_from_name("inp_0_0_0"), Ok([0, 0, 0]));
+        assert_eq!(cell_from_name("inp_0_10_0"), Ok([0, 10, 0]));
+        assert_eq!(cell_from_name("inp_100_10_10"), Ok([100, 10, 10]));
+        assert!(cell_from_name("inp_10_10_10_10").is_err());
+        assert!(cell_from_name("inp_10_10").is_err());
+        assert!(cell_from_name("inP_10_10_10").is_err());
+        assert!(cell_from_name("inp_10").is_err());
+        assert!(cell_from_name("inp___").is_err());
     }
 }

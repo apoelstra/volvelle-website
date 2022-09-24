@@ -66,61 +66,82 @@ async function cancelGlobalParams() {
 async function newInitialShare() {
     console.assert(g_session !== undefined);
     const idx = g_session.new_share();
-    g_session.set_active_share(idx);
-    createChecksumWorksheet(g_session.get_checksum_worksheet_cells());
+    createChecksumWorksheet(idx, g_session.get_checksum_worksheet_cells(idx));
+    showDiv("div_worksheet_" + idx);
     return;
 }
 
 // Construct a new checksum worksheet
-function createChecksumWorksheet(cells) {
-     // FIXME we aren't supposed to actually manipulate the DOM here
-     document.getElementById("div_home").style.display = "none";
-     let tab = document.getElementById('div_worksheet');
-     tab.textContent = "";
-console.log(cells);
+function createChecksumWorksheet(idx, cells) {
+    let table = document.createElement('div');
+    table.id = "div_worksheet_" + idx;
+    table.style.display = "none";
 
-     for (cell of cells) {
-         let domInp = document.createElement("input");
-         domInp.id = cell.dom_id;
-         domInp.disabled = true; // only a couple cell types are editable
-         domInp.value = cell.val || '';
-         switch (cell.ty) {
-         case "symbol":
-             console.assert(cell.val !== undefined);
-             domInp.className = "cell cell_symbol";
-             break;
-         case "fixed_hrp":
-             console.assert(cell.val !== undefined);
-             domInp.className = "cell cell_hrp";
-             break;
-         case "share_data":
-             domInp.className = "cell cell_data";
-             domInp.addEventListener("change", handleInputChange);
-             domInp.disabled = false;
-             break;
-         case "share_data_checksum":
-             domInp.className = "cell cell_data cell_pink";
-             break;
-         case "residue":
-             domInp.className = "cell cell_residue";
-         case "sum":
-             domInp.className = "cell cell_sum";
-             break;
-         case "sum_checksum":
-             domInp.className = "cell cell_sum cell_pink";
-             break;
-         case "global_residue":
-             domInp.className = "cell cell_residue";
-         }
-         domInp.style.left = (g_cellparams.width * cell.x + (g_cellparams.spacer * (cell.x / 4 | 0))) + "px";
-         domInp.style.top = (g_cellparams.height * cell.y) + "px";
-         domInp.maxLength = 1;
-         tab.appendChild(domInp);
-     }
+    let home_link = document.createElement("a");
+    home_link.appendChild(document.createTextNode("Home"));
+    home_link.href = "#";
+    home_link.addEventListener("click", () => { showDiv("div_home"); });
+    table.appendChild(home_link);
+
+    let max_y = 0;
+    for (cell of cells) {
+        let domInp = document.createElement("input");
+        domInp.id = cell.dom_id;
+        domInp.disabled = true; // only a couple cell types are editable
+        domInp.value = cell.val || '';
+        switch (cell.ty) {
+        case "symbol":
+            console.assert(cell.val !== undefined);
+            domInp.className = "cell cell_symbol";
+            break;
+        case "fixed_hrp":
+            console.assert(cell.val !== undefined);
+            domInp.className = "cell cell_hrp";
+            break;
+        case "share_data":
+            domInp.className = "cell cell_data";
+            domInp.addEventListener("change", handleInputChange);
+            domInp.disabled = false;
+            break;
+        case "share_data_checksum":
+            domInp.className = "cell cell_data cell_pink";
+            break;
+        case "residue":
+            domInp.className = "cell cell_residue";
+        case "sum":
+            domInp.className = "cell cell_sum";
+            break;
+        case "sum_checksum":
+            domInp.className = "cell cell_sum cell_pink";
+            break;
+        case "global_residue":
+            domInp.className = "cell cell_residue";
+        }
+        domInp.style.position = "absolute";
+        domInp.style.left = (15 + g_cellparams.width * cell.x + (g_cellparams.spacer * (cell.x / 4 | 0))) + "px";
+        domInp.style.top = (45 + g_cellparams.height * cell.y) + "px";
+        domInp.maxLength = 1;
+        table.appendChild(domInp);
+
+        if (max_y < cell.y) { max_y = cell.y; }
+    }
+    table.style.height = (g_cellparams.height * max_y + 60) + "px";
+    document.getElementById('div_content').appendChild(table);
+
+/*
+    let share_link = document.createElement("a");
+    share_link.appendChild(document.createTextNode("Share"));
+    share_link.href = "#";
+    share_link.addEventListener("click", () => { showDiv("div_home"); });
+    table.appendChild(home_link);
+*/
 }
 
-// Create a new, empty share, and switch to its checksum worksheet
+// Process any actions needed to update the worksheet
 let g_actions = [];
+async function processActions() {
+}
+
 async function handleInputChange(ev) {
     console.assert(g_session !== undefined);
     ev.target.style.color = "black"; // first undo any red coloring that may be left
@@ -129,6 +150,10 @@ async function handleInputChange(ev) {
         ...g_actions,
         ...g_session.handle_input_change(ev.target.id, ev.target.value),
     ];
+    processActions();
+}
+
+async function processActions() {
     let interval;
     interval = setInterval(() => {
         const action = g_actions.shift();
@@ -141,7 +166,6 @@ async function handleInputChange(ev) {
         switch(action.ty) {
         case "flash_error":
             elem.style.color = "red";
-            // setTimeout(function() { elem.style.color = "black"; }, 500); // actually don't change it back
             break;
         case "flash_set":
             elem.value = action.value;
@@ -155,5 +179,16 @@ async function handleInputChange(ev) {
             break;
         }
     }, 20);
+}
+
+function showDiv(id) {
+    document.getElementById("div_home").style.display = "none";
+    for (i = 0; i < g_session.n_shares(); i++) {
+        document.getElementById("div_worksheet_" + i).style.display = "none";
+    }
+
+    let to_show = document.getElementById(id);
+    to_show.style.display = "block";
+    document.getElementById('div_content').style.height = (to_show.offsetHeight + 15) + "px";
 }
 

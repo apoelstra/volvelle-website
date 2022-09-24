@@ -60,13 +60,11 @@
         <td><input style="padding: 0.5ex 2ex; margin: 1em 0" type="button" value="Cancel" disabled id="bt_cancel" onclick="cancelGlobalParams()" /></td>
         <td><input style="padding: 0.5ex 2ex; margin: 1em 0" type="button" value="Update" disabled id="bt_update" onclick="updateGlobalParams()" /></td>
         </tr></table>
-        <h1>Shares</h1>
         <div id="div_sharelist">
+          <h1>Shares</h1>
           <a id="a_newshare" href="#" onclick="newInitialShare()">New initial share</a><br />
         </div>
       </div>
-
-      <div id="div_worksheet">...</div>
 
       <script>
         // Hacky way to compute the width of a cell after borders etc are factored in
@@ -74,8 +72,8 @@
         // but it is hard then to assign to the constant g_cellparams)
         let dummy = document.createElement("input");
         dummy.className = "cell";
-        dummy.style.borderLeft = "0.2em";
-        dummy.style.borderTop = "0.2em";
+        dummy.style.borderLeft = "3px";
+        dummy.style.borderTop = "3px";
         dummy.value = "X";
         document.body.appendChild(dummy);
         const g_cellparams = {

@@ -1,8 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
-cd volvelle-wasm
+pushd $(git rev-parse --show-toplevel)/volvelle-wasm
 wasm-pack build --out-dir ../www/pkg --target no-modules
-cd ..
+cargo test
+popd
 

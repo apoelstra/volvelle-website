@@ -19,57 +19,6 @@ use crate::fe::{self, Checksum, Fe};
 use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 
-/// Helper function to translate a cell ID into a row/cell index pair
-fn cell_from_name(s: &str) -> Result<(usize, usize), Error> {
-    use std::str::FromStr;
-    if s.len() < 7 || &s.as_bytes()[0..4] != b"inp_" {
-        return Err(Error::UnknownCell {
-            id: s.into(),
-            reason: "no inp_ prefix",
-        });
-    }
-    let ret1;
-    let ret2;
-    let mut iter = s[4..].split('_');
-    if let Some(n1) = iter.next() {
-        if let Ok(n) = usize::from_str(n1) {
-            ret1 = n;
-        } else {
-            return Err(Error::UnknownCell {
-                id: s.into(),
-                reason: "first number did not parse",
-            });
-        }
-    } else {
-        return Err(Error::UnknownCell {
-            id: s.into(),
-            reason: "no first number",
-        });
-    }
-    if let Some(n2) = iter.next() {
-        if let Ok(n) = usize::from_str(n2) {
-            ret2 = n;
-        } else {
-            return Err(Error::UnknownCell {
-                id: s.into(),
-                reason: "second number did not parse",
-            });
-        }
-    } else {
-        return Err(Error::UnknownCell {
-            id: s.into(),
-            reason: "no second number",
-        });
-    }
-    if iter.next().is_some() {
-        return Err(Error::UnknownCell {
-            id: s.into(),
-            reason: "more than 2 numbers",
-        });
-    }
-    Ok((ret1, ret2))
-}
-
 /// How to render a given cell
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum CellType {
@@ -199,6 +148,7 @@ pub struct Worksheet {
     size: usize,
     rows: Vec<Row>,
     checksum: Checksum,
+    idx: usize,
 }
 
 impl Worksheet {
@@ -208,6 +158,7 @@ impl Worksheet {
         create_mode: CreateMode,
         size: usize,
         checksum: Checksum,
+        idx: usize,
     ) -> Result<Worksheet, Error> {
         let mut ret = Worksheet {
             hrp: hrp.to_string().to_ascii_uppercase(),
@@ -215,6 +166,7 @@ impl Worksheet {
             size,
             rows: vec![],
             checksum,
+            idx,
         };
 
         if size < ret.hrp.len() + checksum.len() {
@@ -244,17 +196,26 @@ impl Worksheet {
         Ok(ret)
     }
 
+    /// Helper to construct a cell
+    fn add_cell_to_last_row(&mut self, offset: usize, ty: CellType, val: Option<Fe>) {
+        let ridx = self.rows.len() - 1;
+        let row = self.rows.last_mut().unwrap();
+        let cidx = row.cells.len();
+
+        row.cells.push(Cell {
+            ty,
+            is_checksum: self.hrp.len() + offset + 1 + cidx >= self.size - self.checksum.len(),
+            dom_id: format!("inp_{}_{}_{}", self.idx, ridx, cidx),
+            val,
+        });
+    }
+
     /// Helper to populate the first row (checksum_len many data chars)
     fn add_first_row(&mut self) {
         assert_eq!(self.rows.len(), 0);
         self.rows.push(Row { cells: vec![] });
-        for n in 0..self.checksum.len() {
-            self.rows[0].cells.push(Cell {
-                ty: CellType::ShareData,
-                is_checksum: self.hrp.len() + 1 + n >= self.size - self.checksum.len(),
-                dom_id: format!("inp_{}_{}", 0, n),
-                val: None,
-            });
+        for _ in 0..self.checksum.len() {
+            self.add_cell_to_last_row(0, CellType::ShareData, None);
         }
     }
 
@@ -266,68 +227,34 @@ impl Worksheet {
             Checksum::Bech32 => fe::Poly::bech32_hrp_residue(&self.hrp),
             Checksum::Codex32 => fe::Poly::codex32_hrp_residue(&self.hrp),
         };
-        for (n, fe) in hrp_poly.iter().enumerate() {
-            self.rows[1].cells.push(Cell {
-                ty: CellType::Residue,
-                is_checksum: self.hrp.len() + 1 + n >= self.size - self.checksum.len(),
-                dom_id: format!("inp_{}_{}", 1, n),
-                val: Some(fe),
-            });
+        for fe in hrp_poly.iter() {
+            self.add_cell_to_last_row(0, CellType::Residue, Some(fe));
         }
     }
 
     /// Helper to populate the nth and (n+1)th "ordinary" rows (sum then residue)
     fn add_2nth_rows(&mut self, offset: usize) {
-        let ridx = self.rows.len();
+        self.rows.push(Row { cells: vec![] });
+        for _ in 0..self.checksum.len() {
+            self.add_cell_to_last_row(offset, CellType::Sum, None);
+        }
+        self.add_cell_to_last_row(offset, CellType::ShareData, None);
+        self.add_cell_to_last_row(offset, CellType::ShareData, None);
 
         self.rows.push(Row { cells: vec![] });
-        let row = self.rows.last_mut().unwrap();
-        for n in 0..self.checksum.len() {
-            row.cells.push(Cell {
-                ty: CellType::Sum,
-                is_checksum: self.hrp.len() + 1 + offset + n >= self.size - self.checksum.len(),
-                dom_id: format!("inp_{}_{}", ridx, n),
-                val: None,
-            });
-        }
-        for n in 0..2 {
-            row.cells.push(Cell {
-                ty: CellType::ShareData,
-                is_checksum: self.hrp.len() + 1 + offset + self.checksum.len() + n
-                    >= self.size - self.checksum.len(),
-                dom_id: format!("inp_{}_{}", ridx, self.checksum.len() + n),
-                val: None,
-            });
-        }
-
-        self.rows.push(Row { cells: vec![] });
-        let row = self.rows.last_mut().unwrap();
-        for n in 0..self.checksum.len() {
-            row.cells.push(Cell {
-                ty: CellType::Residue,
-                is_checksum: self.hrp.len() + 3 + offset + n >= self.size - self.checksum.len(),
-                dom_id: format!("inp_{}_{}", ridx + 1, n),
-                val: None,
-            });
+        for _ in 0..self.checksum.len() {
+            self.add_cell_to_last_row(offset + 2, CellType::Residue, None);
         }
     }
 
     fn add_final_row(&mut self) {
-        let ridx = self.rows.len();
-
         let checksum_str = match self.checksum {
             Checksum::Codex32 => "SECRETSHARE32",
             Checksum::Bech32 => "QQQQQP",
         };
         self.rows.push(Row { cells: vec![] });
-        let row = self.rows.last_mut().unwrap();
-        for (n, ch) in checksum_str.chars().enumerate() {
-            row.cells.push(Cell {
-                ty: CellType::GlobalResidue,
-                is_checksum: true,
-                dom_id: format!("inp_{}_{}", ridx, n),
-                val: Some(Fe::try_from(ch).unwrap()),
-            });
+        for ch in checksum_str.chars() {
+            self.add_cell_to_last_row(0, CellType::GlobalResidue, Fe::try_from(ch).ok());
         }
     }
 
@@ -411,32 +338,36 @@ impl Worksheet {
     }
 
     /// Handle a user-initiated change in one of the cells
-    pub fn handle_input_change(&mut self, id: &str, val: &str) -> Result<Vec<Action>, Error> {
-        let cell = cell_from_name(id)?;
-        if cell.0 >= self.rows.len() {
+    pub fn handle_input_change(
+        &mut self,
+        ridx: usize,
+        cidx: usize,
+        val: &str,
+    ) -> Result<Vec<Action>, Error> {
+        if ridx >= self.rows.len() {
             return Err(Error::InvalidRow {
-                row: cell.0,
+                row: ridx,
                 n_rows: self.rows.len(),
             });
         }
-        if cell.1 >= self.rows[cell.0].cells.len() {
+        if cidx >= self.rows[ridx].cells.len() {
             return Err(Error::InvalidCell {
-                cell: cell.1,
-                row: cell.0,
+                cell: cidx,
+                row: ridx,
                 n_cells: self.rows[0].cells.len(),
             });
         }
 
         match val.len() {
             0 => {
-                self.rows[cell.0].cells[cell.1].val = None;
+                self.rows[ridx].cells[cidx].val = None;
                 Ok(vec![])
             }
             1 => {
                 if !val.is_ascii() {
                     return Ok(vec![Action {
                         ty: "flash_error",
-                        id: id.into(),
+                        id: self.rows[ridx].cells[cidx].dom_id.clone(),
                         value: None,
                     }]);
                 }
@@ -447,25 +378,25 @@ impl Worksheet {
                     Err(_) => {
                         return Ok(vec![Action {
                             ty: "flash_error",
-                            id: id.into(),
+                            id: self.rows[ridx].cells[cidx].dom_id.clone(),
                             value: None,
                         }]);
                     }
                 };
 
-                self.rows[cell.0].cells[cell.1].val = Some(fe);
+                self.rows[ridx].cells[cidx].val = Some(fe);
                 let mut ret = vec![];
                 if ch != ch_u {
                     ret.push(Action {
                         ty: "flash_set",
-                        id: id.into(),
+                        id: self.rows[ridx].cells[cidx].dom_id.clone(),
                         value: Some(ch_u),
                     });
                 };
 
                 // Actually update the sheet
                 let mut queue = VecDeque::with_capacity(2 * self.checksum.len());
-                queue.push_back((cell.0, cell.1));
+                queue.push_back((ridx, cidx));
 
                 macro_rules! unwrap_or_continue {
                     ($e:expr) => {
@@ -596,7 +527,7 @@ impl Worksheet {
             }
             _ => Ok(vec![Action {
                 ty: "flash_error",
-                id: id.into(),
+                id: self.rows[ridx].cells[cidx].dom_id.clone(),
                 value: None,
             }]),
         }
@@ -631,53 +562,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_input_id() {
-        assert_eq!(cell_from_name("inp_0_0"), Ok((0, 0)));
-        assert_eq!(cell_from_name("inp_10_0"), Ok((10, 0)));
-        assert_eq!(cell_from_name("inp_10_10"), Ok((10, 10)));
-        assert!(cell_from_name("inp_10_10_10").is_err());
-        assert!(cell_from_name("inP_10_10").is_err());
-        assert!(cell_from_name("inp_10").is_err());
-        assert!(cell_from_name("inp__").is_err());
-    }
-
-    #[test]
     fn user_test() {
         let mut worksheet =
-            Worksheet::new("ms", CreateMode::Create, 48, Checksum::Codex32).unwrap();
-        assert!(worksheet.handle_input_change("inp_0_0", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_1", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_2", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_3", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_4", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_5", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_6", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_7", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_8", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_9", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_10", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_11", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_12", "c").is_ok());
+            Worksheet::new("ms", CreateMode::Create, 48, Checksum::Codex32, 0).unwrap();
+        assert!(worksheet.handle_input_change(0, 0, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 1, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 2, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 3, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 4, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 5, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 6, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 7, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 8, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 9, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 10, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 11, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 12, "c").is_ok());
 
-        assert!(worksheet.handle_input_change("inp_2_13", "c").is_ok()); // move this berofe 1414
-        assert!(worksheet.handle_input_change("inp_2_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_4_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_4_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_6_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_6_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_8_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_8_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_10_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_10_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_12_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_12_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_14_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_14_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_16_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_16_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_18_13", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_18_14", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_20_13", "c").is_ok());
+        assert!(worksheet.handle_input_change(2, 13, "c").is_ok()); // move this berofe 1414
+        assert!(worksheet.handle_input_change(2, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(4, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(4, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(6, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(6, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(8, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(8, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(10, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(10, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(12, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(12, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(14, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(14, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(16, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(16, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(18, 13, "c").is_ok());
+        assert!(worksheet.handle_input_change(18, 14, "c").is_ok());
+        assert!(worksheet.handle_input_change(20, 13, "c").is_ok());
 
         assert_eq!(worksheet.rows[20].cells[14].val.map(From::from), Some('D'));
         assert_eq!(worksheet.rows[22].cells[13].val.map(From::from), Some('C'));
@@ -699,16 +619,17 @@ mod tests {
 
     #[test]
     fn minimal_bech32() {
-        let mut worksheet = Worksheet::new("ms", CreateMode::Create, 17, Checksum::Bech32).unwrap();
-        assert!(worksheet.handle_input_change("inp_0_0", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_1", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_2", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_3", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_4", "c").is_ok());
+        let mut worksheet =
+            Worksheet::new("ms", CreateMode::Create, 17, Checksum::Bech32, 0).unwrap();
+        assert!(worksheet.handle_input_change(0, 0, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 1, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 2, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 3, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 4, "c").is_ok());
 
-        assert!(worksheet.handle_input_change("inp_2_6", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_2_7", "c").is_ok());
-        assert!(worksheet.handle_input_change("inp_0_5", "c").is_ok());
+        assert!(worksheet.handle_input_change(2, 6, "c").is_ok());
+        assert!(worksheet.handle_input_change(2, 7, "c").is_ok());
+        assert!(worksheet.handle_input_change(0, 5, "c").is_ok());
 
         assert_eq!(worksheet.rows[4].cells[6].val.map(From::from), Some('5'));
         assert_eq!(worksheet.rows[4].cells[7].val.map(From::from), Some('J'));

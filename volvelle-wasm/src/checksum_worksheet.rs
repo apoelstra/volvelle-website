@@ -358,11 +358,9 @@ impl Worksheet {
             });
         }
 
+        let mut ret = vec![];
         match val.len() {
-            0 => {
-                self.rows[ridx].cells[cidx].val = None;
-                Ok(vec![])
-            }
+            0 => self.rows[ridx].cells[cidx].val = None,
             1 => {
                 if !val.is_ascii() {
                     return Ok(vec![Action {
@@ -373,164 +371,176 @@ impl Worksheet {
                 }
                 let ch = val.chars().next().unwrap();
                 let ch_u = ch.to_ascii_uppercase();
-                let fe = match Fe::try_from(ch_u) {
-                    Ok(fe) => fe,
+                match Fe::try_from(ch_u) {
+                    Ok(fe) => {
+                        self.rows[ridx].cells[cidx].val = Some(fe);
+                        if ch != ch_u {
+                            ret.push(Action {
+                                ty: "flash_set",
+                                id: self.rows[ridx].cells[cidx].dom_id.clone(),
+                                value: Some(ch_u),
+                            });
+                        };
+                    }
                     Err(_) => {
-                        return Ok(vec![Action {
+                        ret.push(Action {
                             ty: "flash_error",
                             id: self.rows[ridx].cells[cidx].dom_id.clone(),
                             value: None,
-                        }]);
+                        });
                     }
                 };
-
-                self.rows[ridx].cells[cidx].val = Some(fe);
-                let mut ret = vec![];
-                if ch != ch_u {
-                    ret.push(Action {
-                        ty: "flash_set",
-                        id: self.rows[ridx].cells[cidx].dom_id.clone(),
-                        value: Some(ch_u),
-                    });
-                };
-
-                // Actually update the sheet
-                let mut queue = VecDeque::with_capacity(2 * self.checksum.len());
-                queue.push_back((ridx, cidx));
-
-                macro_rules! unwrap_or_continue {
-                    ($e:expr) => {
-                        if let Some(e) = $e {
-                            e
-                        } else {
-                            continue;
-                        }
-                    };
-                }
-
-                while let Some((ridx, cidx)) = queue.pop_front() {
-                    let cell = &self.rows[ridx].cells[cidx];
-                    // First, if the cell we're updating is blank, just skip it. Otherwise extract its value.
-                    let fe = match cell.val {
-                        Some(fe) => fe,
-                        None => continue,
-                    };
-
-                    match (cell.ty, cell.is_checksum) {
-                        (CellType::Sum, _) if cidx == 0 || cidx == 1 => {
-                            // For lower diagonal cells, try to compute a residue:
-                            assert!(self.rows[ridx].cells.len() > 1);
-                            assert!(cidx == 0 || cidx == 1); // check that one of the two lines below grabs our target
-                            let fe1 = self.rows[ridx].cells[0].val;
-                            let fe2 = self.rows[ridx].cells[1].val;
-                            if let (Some(fe1), Some(fe2)) = (fe1, fe2) {
-                                // compute residue...
-                                let mut poly: fe::Poly = fe1.into();
-                                poly.mul_by_x_then_add(fe2);
-                                poly.mul_by_x(self.checksum.len());
-                                assert!(self.rows[ridx + 1].cells.len() >= self.checksum.len());
-                                let residue = match self.checksum {
-                                    Checksum::Codex32 => poly.codex32_polymod(),
-                                    Checksum::Bech32 => poly.bech32_polymod(),
-                                };
-                                // ...then put it into the next line's cells
-                                for (n, fe) in residue.iter().enumerate() {
-                                    if self.rows[ridx + 1].cells[n].val == Some(fe) {
-                                        continue; // don't update if the cell is already set
-                                    }
-                                    self.rows[ridx + 1].cells[n].val = Some(fe);
-                                    ret.push(Action {
-                                        ty: "set",
-                                        id: self.rows[ridx + 1].cells[n].dom_id.clone(),
-                                        value: Some(fe.into()),
-                                    });
-                                    queue.push_back((ridx + 1, n));
-                                }
-                            }
-                        }
-                        (CellType::Sum, false) | (CellType::ShareData, false) => {
-                            // For sum cells, we try to add to the cell below
-                            let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
-                            let fe2 = unwrap_or_continue!(self.rows[below.0].cells[below.1].val);
-                            let below2 = unwrap_or_continue!(self.cell_below(below.0, below.1));
-                            // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
-                            let fe3 = fe + fe2;
-                            if self.rows[below2.0].cells[below2.1].val == Some(fe3) {
-                                continue; // don't update if the cell is already set
-                            }
-                            self.rows[below2.0].cells[below2.1].val = Some(fe3);
-                            ret.push(Action {
-                                ty: "set",
-                                id: self.rows[below2.0].cells[below2.1].dom_id.clone(),
-                                value: Some(fe3.into()),
-                            });
-                            queue.push_front((below2.0, below2.1));
-                        }
-                        (CellType::Sum, true) | (CellType::ShareData, true) => {
-                            // For sum cells, we try to add to the cell above
-                            let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
-                            let fe2 = unwrap_or_continue!(self.rows[above.0].cells[above.1].val);
-                            let above2 = unwrap_or_continue!(self.cell_above(above.0, above.1));
-                            // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
-                            let fe3 = fe + fe2;
-                            if self.rows[above2.0].cells[above2.1].val == Some(fe3) {
-                                continue; // don't update if the cell is already set
-                            }
-                            self.rows[above2.0].cells[above2.1].val = Some(fe3);
-                            ret.push(Action {
-                                ty: "set",
-                                id: self.rows[above2.0].cells[above2.1].dom_id.clone(),
-                                value: Some(fe3.into()),
-                            });
-                            queue.push_front((above2.0, above2.1));
-                        }
-                        (CellType::Residue, false) => {
-                            // Residue cells are very similar to sum cells
-                            let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
-                            let fe2 = unwrap_or_continue!(self.rows[above.0].cells[above.1].val);
-                            let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
-                            // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
-                            let fe3 = fe + fe2;
-                            if self.rows[below.0].cells[below.1].val == Some(fe3) {
-                                continue; // don't update if the cell is already set
-                            }
-                            self.rows[below.0].cells[below.1].val = Some(fe3);
-                            ret.push(Action {
-                                ty: "set",
-                                id: self.rows[below.0].cells[below.1].dom_id.clone(),
-                                value: Some(fe3.into()),
-                            });
-                            queue.push_front((below.0, below.1));
-                        }
-                        (CellType::Residue, true) => {
-                            // Residue cells are very similar to sum cells
-                            let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
-                            let fe2 = unwrap_or_continue!(self.rows[below.0].cells[below.1].val);
-                            let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
-                            // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
-                            let fe3 = fe + fe2;
-                            if self.rows[above.0].cells[above.1].val == Some(fe3) {
-                                continue; // don't update if the cell is already set
-                            }
-                            self.rows[above.0].cells[above.1].val = Some(fe3);
-                            ret.push(Action {
-                                ty: "set",
-                                id: self.rows[above.0].cells[above.1].dom_id.clone(),
-                                value: Some(fe3.into()),
-                            });
-                            queue.push_back((above.0, above.1));
-                        }
-                        (CellType::GlobalResidue, _) => unreachable!(),
-                    }
-                }
-                Ok(ret)
             }
-            _ => Ok(vec![Action {
+            _ => ret.push(Action {
                 ty: "flash_error",
                 id: self.rows[ridx].cells[cidx].dom_id.clone(),
                 value: None,
-            }]),
+            }),
         }
+
+        // Actually update the sheet
+        let mut queue = VecDeque::with_capacity(2 * self.checksum.len());
+        queue.push_back((ridx, cidx));
+
+        // Utility to add two possibly-set fes
+        fn fe_add(fe1: Option<Fe>, fe2: Option<Fe>) -> Option<Fe> {
+            if let (Some(fe1), Some(fe2)) = (fe1, fe2) {
+                Some(fe1 + fe2)
+            } else {
+                None
+            }
+        }
+        macro_rules! unwrap_or_continue {
+            ($e:expr) => {
+                if let Some(e) = $e {
+                    e
+                } else {
+                    continue;
+                }
+            };
+        }
+
+        // Recursively update all cells
+        while let Some((ridx, cidx)) = queue.pop_front() {
+            let cell = &self.rows[ridx].cells[cidx];
+            match (cell.ty, cell.is_checksum) {
+                (CellType::Sum, _) if cidx == 0 || cidx == 1 => {
+                    // For lower diagonal cells, try to compute a residue:
+                    assert!(self.rows[ridx].cells.len() > 1);
+                    assert!(cidx == 0 || cidx == 1); // check that one of the two lines below grabs our target
+                    let fe1 = self.rows[ridx].cells[0].val;
+                    let fe2 = self.rows[ridx].cells[1].val;
+                    if let (Some(fe1), Some(fe2)) = (fe1, fe2) {
+                        // compute residue...
+                        let mut poly: fe::Poly = fe1.into();
+                        poly.mul_by_x_then_add(fe2);
+                        poly.mul_by_x(self.checksum.len());
+                        assert!(self.rows[ridx + 1].cells.len() >= self.checksum.len());
+                        let residue = match self.checksum {
+                            Checksum::Codex32 => poly.codex32_polymod(),
+                            Checksum::Bech32 => poly.bech32_polymod(),
+                        };
+                        // ...then put it into the next line's cells
+                        for (n, fe) in residue.iter().enumerate() {
+                            if self.rows[ridx + 1].cells[n].val == Some(fe) {
+                                continue; // don't update if the cell is already set
+                            }
+                            self.rows[ridx + 1].cells[n].val = Some(fe);
+                            ret.push(Action {
+                                ty: "set",
+                                id: self.rows[ridx + 1].cells[n].dom_id.clone(),
+                                value: Some(fe.into()),
+                            });
+                            queue.push_back((ridx + 1, n));
+                        }
+                    } else {
+                        // Otherwise blank the residue
+                        for n in 0..self.checksum.len() {
+                            if self.rows[ridx + 1].cells[n].val == None {
+                                continue; // don't update if the cell is already blank
+                            }
+                            self.rows[ridx + 1].cells[n].val = None;
+                            ret.push(Action {
+                                ty: "set",
+                                id: self.rows[ridx + 1].cells[n].dom_id.clone(),
+                                value: None,
+                            });
+                            queue.push_back((ridx + 1, n));
+                        }
+                    }
+                }
+                (CellType::Sum, false) | (CellType::ShareData, false) => {
+                    // For sum cells, we try to add to the cell below
+                    let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
+                    let below2 = unwrap_or_continue!(self.cell_below(below.0, below.1));
+                    // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
+                    let fe3 = fe_add(cell.val, self.rows[below.0].cells[below.1].val);
+                    if self.rows[below2.0].cells[below2.1].val == fe3 {
+                        continue; // don't update if the cell is already set
+                    }
+                    self.rows[below2.0].cells[below2.1].val = fe3;
+                    ret.push(Action {
+                        ty: "set",
+                        id: self.rows[below2.0].cells[below2.1].dom_id.clone(),
+                        value: fe3.map(char::from),
+                    });
+                    queue.push_front((below2.0, below2.1));
+                }
+                (CellType::Sum, true) | (CellType::ShareData, true) => {
+                    // For sum cells, we try to add to the cell above
+                    let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
+                    let above2 = unwrap_or_continue!(self.cell_above(above.0, above.1));
+                    // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
+                    let fe3 = fe_add(cell.val, self.rows[above.0].cells[above.1].val);
+                    if self.rows[above2.0].cells[above2.1].val == fe3 {
+                        continue; // don't update if the cell is already set
+                    }
+                    self.rows[above2.0].cells[above2.1].val = fe3;
+                    ret.push(Action {
+                        ty: "set",
+                        id: self.rows[above2.0].cells[above2.1].dom_id.clone(),
+                        value: fe3.map(char::from),
+                    });
+                    queue.push_front((above2.0, above2.1));
+                }
+                (CellType::Residue, false) => {
+                    // Residue cells are very similar to sum cells
+                    let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
+                    let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
+                    // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
+                    let fe3 = fe_add(cell.val, self.rows[above.0].cells[above.1].val);
+                    if self.rows[below.0].cells[below.1].val == fe3 {
+                        continue; // don't update if the cell is already set
+                    }
+                    self.rows[below.0].cells[below.1].val = fe3;
+                    ret.push(Action {
+                        ty: "set",
+                        id: self.rows[below.0].cells[below.1].dom_id.clone(),
+                        value: fe3.map(char::from),
+                    });
+                    queue.push_front((below.0, below.1));
+                }
+                (CellType::Residue, true) => {
+                    // Residue cells are very similar to sum cells
+                    let below = unwrap_or_continue!(self.cell_below(ridx, cidx));
+                    let above = unwrap_or_continue!(self.cell_above(ridx, cidx));
+                    // Update the sum, return to the JS an instruction to update the cell, and add it to the queue
+                    let fe3 = fe_add(cell.val, self.rows[below.0].cells[below.1].val);
+                    if self.rows[above.0].cells[above.1].val == fe3 {
+                        continue; // don't update if the cell is already set
+                    }
+                    self.rows[above.0].cells[above.1].val = fe3;
+                    ret.push(Action {
+                        ty: "set",
+                        id: self.rows[above.0].cells[above.1].dom_id.clone(),
+                        value: fe3.map(char::from),
+                    });
+                    queue.push_back((above.0, above.1));
+                }
+                (CellType::GlobalResidue, _) => unreachable!(),
+            }
+        }
+        Ok(ret)
     }
 
     /// Returns the first six characters of the share, with `_`s for missign characters
@@ -610,6 +620,10 @@ mod tests {
 
         assert_eq!(worksheet.cell_below(2, 15), Some((3, 13)));
         assert_eq!(worksheet.cell_below(3, 13), Some((4, 13)));
+
+        assert!(worksheet.handle_input_change(0, 5, "").is_ok());
+        assert_eq!(worksheet.rows[20].cells[14].val, None);
+        assert_eq!(worksheet.rows[22].cells[13].val, None);
     }
 
     #[test]

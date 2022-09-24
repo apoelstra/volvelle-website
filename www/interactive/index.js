@@ -176,12 +176,12 @@ async function processActions() {
             elem.style.color = "red";
             break;
         case "flash_set":
-            elem.value = action.value;
+            elem.value = action.value || '';
             elem.style.color = "green";
             setTimeout(() => { elem.style.color = "black"; }, 500);
             break;
         case "set":
-            elem.value = action.value;
+            elem.value = action.value || '';
             elem.style.fontWeight = "bold";
             setTimeout(() => { elem.style.fontWeight = "normal"; }, 500);
             break;

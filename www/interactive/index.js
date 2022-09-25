@@ -3,15 +3,17 @@ const {Session} = wasm_bindgen;
 
 /**
 * Initialize WASM -- this must be called before any wasm funcitonality is available,
-* but after the document is loaded.
+* but after the document is loaded, and must only be called once. (Curiously, calling
+* it more than once actually crashes qutebrowser)
 *
-* We call it from `new_session` which is called from the body onload handler. I'm
-* not sure how to call it directly and still have it run before `new_session`,
-* because it seems to only work in an async context. But awaiting it from within
-* `new_session` works.
+* This also calls `new_session` since I want to call this from onload as well. I'd
+* like to have these two things be separated but it's not clear how, since it seems
+* `wasm_bindgen` will only work in an async context and I need it to complete before
+* I can call `new_session`, and the await keywoard doesn't work in onload="".
 */
-async function init_wasm() {
+async function body_onload() {
     await wasm_bindgen('../pkg/volvelle_wasm_bg.wasm');
+    await new_session();
 }
 
 /**
@@ -24,18 +26,42 @@ async function init_wasm() {
 let g_session;
 
 /**
+* Determine whether or not local storage is available.
+*
+* It would be nice if we could just try to use local storage and soft-fail if it's
+* not available, but some browsers actually throw exceptions and will interrupt
+* your code, so we need to check that first.
+*
+* This basically came from https://gist.github.com/paulirish/5558557
+*/
+const g_has_local_storage = function() {
+    try {
+        const x = '__storage_test__';
+        localStorage.setItem(x, x);
+        localStorage.removeItem(x);
+        return true;
+    }
+    catch (e) {
+        return false; // we dgaf why, just say it's disabled if it doesn't work
+    }
+}();
+
+/**
 * Initialize the global session object
 *
 * This directly copies settings from the DOM and overwrites any existing session
-* object. It is called from onload and when the user hits the "Update" button,
-* which will provide a warning if the operation would be destructive.
+* object, deleting all shares. It is called from onload and when the user hits
+* the "Update" button, which will provide a warning if the operation would be
+* destructive.
 */
 async function new_session() {
-    await init_wasm();
+    if (g_has_local_storage) {
+        localStorage.clear();
+    }
 
     if (g_session !== undefined) {
         for (idx = 0; idx < g_session.n_shares(); idx++) {
-            let del = document.getElementById("a_worksheet_" + idx);
+            const del = document.getElementById("a_worksheet_" + idx);
             del.parentNode.removeChild(del);
         }
     }
@@ -88,7 +114,9 @@ async function updateGlobalParams() {
      }
 }
 
-// The user clicked "Cancel"; copy the current values into the web UI
+/**
+* The user clicked "Cancel"; replace the DOM global setting values with those from g_session
+*/
 async function cancelGlobalParams() {
      console.assert(g_session !== undefined);
      console.assert(globalParamsChanged()); // button should've been disabled otherwise
@@ -100,7 +128,9 @@ async function cancelGlobalParams() {
      document.getElementById("bt_cancel").disabled = true;
 }
 
-// Create a new, empty share, and switch to its checksum worksheet
+/**
+* The user clicked "new share"; create a new empty share and switch to its checksum worksheet
+*/
 async function newInitialShare() {
     console.assert(g_session !== undefined);
     const idx = g_session.new_share();
@@ -109,19 +139,25 @@ async function newInitialShare() {
     return;
 }
 
-// Construct a new checksum worksheet
+/**
+* Construct a new checksum worksheet
+*
+* This is a purely DOM-manipulating function. It should be called with a valid share
+* index `idx` and the output from `g_session.get_checksum_worksheet(idx)` which
+* provides a giant list of cells, their types, positions and values.
+*/
 function createChecksumWorksheet(idx, cells) {
-    let table = document.createElement('div');
+    const table = document.createElement('div');
     table.id = "div_worksheet_" + idx;
     table.style.display = "none";
 
-    let home_link = document.createElement("a");
+    const home_link = document.createElement("a");
     home_link.appendChild(document.createTextNode("Home"));
     home_link.href = "#";
     home_link.addEventListener("click", () => { showDiv("div_home"); });
     table.appendChild(home_link);
 
-    let rand_link = document.createElement("a");
+    const rand_link = document.createElement("a");
     rand_link.appendChild(document.createTextNode("Fill Randomly"));
     rand_link.href = "#";
     rand_link.addEventListener("click", () => { randomizeShare(idx); });
@@ -130,7 +166,7 @@ function createChecksumWorksheet(idx, cells) {
 
     let max_y = 0;
     for (cell of cells) {
-        let domInp = document.createElement("input");
+        const domInp = document.createElement("input");
         domInp.id = cell.dom_id;
         domInp.disabled = true; // only a couple cell types are editable
         domInp.value = cell.val || '';
@@ -173,7 +209,7 @@ function createChecksumWorksheet(idx, cells) {
     table.style.height = (g_cellparams.height * max_y + 60) + "px";
     document.getElementById('div_content').appendChild(table);
 
-    let share_link = document.createElement("a");
+    const share_link = document.createElement("a");
     share_link.textContent = "Share ______";
     share_link.href = "#";
     share_link.addEventListener("click", () => { showDiv("div_worksheet_" + idx); });
@@ -182,40 +218,59 @@ function createChecksumWorksheet(idx, cells) {
     document.getElementById("div_sharelist").appendChild(document.createElement("br"));
 }
 
-// Process any actions needed to update the worksheet
-let g_actions = [];
-async function processActions() {
-}
+/**
+* List of "actions" returned from `g_session` in response to some cell update.
+*
+* These actions are in the order that a paper user would (probably) fill in the
+* cells, and should be replicated in the DOM with a tiny delay between each one
+* to create an "animation" of the proper worksheet completion.
+*
+* We store these in a global array and pop them one by one from a `setInterval`
+* function which disables itself when there are no more actions. When adding
+* more actions you should call `processActions` to ensure that the loop is running.
+*/
+let g_worksheet_actions = [];
 
+/**
+* Respond to a user's edit of a cell in the checksum worksheet.
+*
+* We pass the change to wasm via `g_session.handle_input_change`, which returns
+* a list of actions which we use to update the rest of the sheet.
+*/
 async function handleInputChange(ev) {
     console.assert(g_session !== undefined);
     ev.target.style.color = "black"; // first undo any red coloring that may be left
 
     // Update sheet and get list of consquent actions
-    g_actions = [
-        ...g_actions,
+    g_worksheet_actions = [
+        ...g_worksheet_actions,
         ...g_session.handle_input_change(ev.target.id, ev.target.value),
     ];
 
     // Update link text on home page
-    let idx = g_session.get_idx_of(ev.target.id);
-    let header_str = g_session.get_checksum_worksheet_header_str(idx);
+    const idx = g_session.get_idx_of(ev.target.id);
+    const header_str = g_session.get_checksum_worksheet_header_str(idx);
     document.getElementById("a_worksheet_" + idx).textContent = "Share " + header_str;
 
     // Execute all the actions
     processActions();
 }
 
+/**
+* Process the queue of actions.
+*
+* Deal with every queued-up action with a small delay in between.
+*/
 async function processActions() {
     let interval;
     interval = setInterval(() => {
-        const action = g_actions.shift();
+        const action = g_worksheet_actions.shift();
         if (action === undefined) {
             clearInterval(interval);
             return;
         }
 
-        let elem = document.getElementById(action.id);
+        const elem = document.getElementById(action.id);
         switch(action.ty) {
         case "flash_error":
             elem.style.color = "red";
@@ -234,22 +289,43 @@ async function processActions() {
     }, 20);
 }
 
+/**
+* Hide all the main <div>s except the given one, which we show.
+*/
 function showDiv(id) {
     document.getElementById("div_home").style.display = "none";
     for (i = 0; i < g_session.n_shares(); i++) {
         document.getElementById("div_worksheet_" + i).style.display = "none";
     }
 
-    let to_show = document.getElementById(id);
+    const to_show = document.getElementById(id);
     to_show.style.display = "block";
     // Do this in a settimeout to avoid angsty "forced reflow took XXms" warnings
     setTimeout(() => {  document.getElementById('div_content').style.height = (to_show.offsetHeight + 15) + "px"; }, 0);
 }
 
-/// Fills in 
+/**
+* Fills in a checksum worksheet with random data.
+*/
 function randomizeShare(idx) {
-    let div_id = "div_worksheet_" + idx;
-    for (child of document.getElementById(div_id)) {
+    const div_id = "div_worksheet_" + idx;
+    const ALPHABET = "023456789ACDEFGHJKLMNPQRSTUVWXYZ";
+    const rand = new Uint32Array(g_session.size);
+    crypto.getRandomValues(rand);
+
+    let i = 0;
+    for (child of document.getElementById(div_id).childNodes) {
+        if (child.disabled === false) {
+            if (child.value == '') {
+                child.value = ALPHABET[rand[i++] & 0x1f];
+                g_worksheet_actions.push({
+                    "ty": "flash_set",
+                    "id": child.id,
+                    "value": child.value,
+                });
+                child.dispatchEvent(new Event('change'));
+            }
+        }
     }
 }
 

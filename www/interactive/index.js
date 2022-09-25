@@ -1,25 +1,44 @@
 
 const {Session} = wasm_bindgen;
+
+/**
+* Initialize WASM -- this must be called before any wasm funcitonality is available,
+* but after the document is loaded.
+*
+* We call it from `new_session` which is called from the body onload handler. I'm
+* not sure how to call it directly and still have it run before `new_session`,
+* because it seems to only work in an async context. But awaiting it from within
+* `new_session` works.
+*/
 async function init_wasm() {
     await wasm_bindgen('../pkg/volvelle_wasm_bg.wasm');
 }
 
-// Global "session" state which is basically passed into Rust and back
-// every time something changes.
+/**
+* Global session data which is used to access the state of the wasm code.
+*
+* In general, the way all this code works is by reacting to DOM events, calling
+* methods on the global session object, then manipulating the DOM based on the
+* return value of those methods.
+*/
 let g_session;
 
-// Construct a new session from the user's current choice of global parameters
+/**
+* Initialize the global session object
+*
+* This directly copies settings from the DOM and overwrites any existing session
+* object. It is called from onload and when the user hits the "Update" button,
+* which will provide a warning if the operation would be destructive.
+*/
 async function new_session() {
-    if (typeof WebAssembly !== "object") {
-        alert(
-            "You appear to have webassembly disabled (e.g. you are using an iPhone in Lockdown Mode). "
-            + "The interactive features of this site will not work for you, sorry. Since you are so "
-            + "security-minded I'm sure you will not be too put out to have to use the paper version."
-        );
-    }
-    // Don't bother exiting or anything, just try to load the site and crash&burn if we will
-
     await init_wasm();
+
+    if (g_session !== undefined) {
+        for (idx = 0; idx < g_session.n_shares(); idx++) {
+            let del = document.getElementById("a_worksheet_" + idx);
+            del.parentNode.removeChild(del);
+        }
+    }
 
     g_session = new Session(
        document.getElementById("i_hrp").value,
@@ -29,8 +48,12 @@ async function new_session() {
     );
 }
 
-// Determine whether the user's choice of parameters in the web UI differs from
-// the active parameters
+/**
+* Determine whether the user's choice of parameters in the web UI differs from g_session
+*
+* This is used to enable/disable the "Update"/"Cancel" buttons in the global
+* settings dialog.
+*/
 function globalParamsChanged() {
      return (g_session.hrp != document.getElementById("i_hrp").value)
          || (g_session.checksum != document.getElementById("i_checksum").value)
@@ -38,7 +61,9 @@ function globalParamsChanged() {
          || (g_session.threshold != document.getElementById("i_k").value);
 }
 
-// If the user has changed something, activate/deactivate the Update/Cancel buttons
+/**
+* Update the enabled/disabled state of the "Update" and "Cancel" buttons
+*/
 async function selectGlobalParams() {
      console.assert(g_session !== undefined);
      const changed = globalParamsChanged();
@@ -47,7 +72,11 @@ async function selectGlobalParams() {
      document.getElementById("bt_cancel").disabled = !changed;
 }
 
-// The user clicked "Update"; clear all shares and set the global parameters to new values
+/**
+* Create a new session in response to the user clicking "Update"
+*
+* Will provide a warning prompt if this would destroy shares.
+*/
 async function updateGlobalParams() {
      console.assert(g_session !== undefined);
      console.assert(globalParamsChanged()); // button should've been disabled otherwise
@@ -91,6 +120,13 @@ function createChecksumWorksheet(idx, cells) {
     home_link.href = "#";
     home_link.addEventListener("click", () => { showDiv("div_home"); });
     table.appendChild(home_link);
+
+    let rand_link = document.createElement("a");
+    rand_link.appendChild(document.createTextNode("Fill Randomly"));
+    rand_link.href = "#";
+    rand_link.addEventListener("click", () => { randomizeShare(idx); });
+    rand_link.style.marginLeft = "2em";
+    table.appendChild(rand_link);
 
     let max_y = 0;
     for (cell of cells) {
@@ -208,5 +244,12 @@ function showDiv(id) {
     to_show.style.display = "block";
     // Do this in a settimeout to avoid angsty "forced reflow took XXms" warnings
     setTimeout(() => {  document.getElementById('div_content').style.height = (to_show.offsetHeight + 15) + "px"; }, 0);
+}
+
+/// Fills in 
+function randomizeShare(idx) {
+    let div_id = "div_worksheet_" + idx;
+    for (child of document.getElementById(div_id)) {
+    }
 }
 

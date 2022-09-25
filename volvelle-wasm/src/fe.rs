@@ -19,6 +19,7 @@
 
 #![allow(clippy::suspicious_arithmetic_impl)] // Clippy is retarded
 
+use crate::error::Error;
 use std::{fmt, iter, ops};
 use wasm_bindgen::prelude::*;
 
@@ -86,9 +87,9 @@ impl fmt::Display for Fe {
 }
 
 impl TryFrom<char> for Fe {
-    type Error = String;
+    type Error = Error;
 
-    fn try_from(ch: char) -> Result<Self, String> {
+    fn try_from(ch: char) -> Result<Self, Error> {
         match ch {
             'Q' => Ok(Fe(0x00)),
             'P' => Ok(Fe(0x01)),
@@ -122,7 +123,7 @@ impl TryFrom<char> for Fe {
             'A' => Ok(Fe(0x1d)),
             '7' => Ok(Fe(0x1e)),
             'L' => Ok(Fe(0x1f)),
-            x => Err(format!("invalid bech32 character {}", x)),
+            x => Err(Error::BadBech32Char { ch: x }),
         }
     }
 }

@@ -75,14 +75,6 @@ pub struct Row {
     cells: Vec<Cell>,
 }
 
-/// Whether the worksheet should be in "create share" or "verify share" mode
-#[wasm_bindgen]
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum CreateMode {
-    Create = 0,
-    Verify = 1,
-}
-
 impl Checksum {
     /// Length of the generator polynomial
     fn len(&self) -> usize {
@@ -140,11 +132,9 @@ impl DomCell {
 }
 
 /// The entire checksum worksheet
-#[wasm_bindgen]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Worksheet {
     hrp: String,
-    create_mode: CreateMode,
     size: usize,
     rows: Vec<Row>,
     checksum: Checksum,
@@ -153,16 +143,9 @@ pub struct Worksheet {
 
 impl Worksheet {
     /// Constructs a new blank worksheet
-    pub fn new(
-        hrp: &str,
-        create_mode: CreateMode,
-        size: usize,
-        checksum: Checksum,
-        idx: usize,
-    ) -> Result<Worksheet, Error> {
+    pub fn new(hrp: &str, size: usize, checksum: Checksum, idx: usize) -> Result<Worksheet, Error> {
         let mut ret = Worksheet {
             hrp: hrp.to_string().to_ascii_uppercase(),
-            create_mode,
             size,
             rows: vec![],
             checksum,
@@ -543,7 +526,7 @@ impl Worksheet {
         Ok(ret)
     }
 
-    /// Returns the first six characters of the share, with `_`s for missign characters
+    /// Returns the first six characters of the share, with `_`s for missing characters
     /// characters of the share (the header)
     pub fn header_str(&self) -> String {
         if self.rows.is_empty() {
@@ -560,6 +543,42 @@ impl Worksheet {
             ret
         }
     }
+
+    /// Dumps all the cell data into a giant string
+    pub fn cells_into_str(&self, s: &mut String) {
+        for row in &self.rows {
+            for cell in &row.cells {
+                s.push(cell.val.map(char::from).unwrap_or(' '));
+            }
+        }
+    }
+
+    /// Reads all the cell data from a string output by `cells_into_str`
+    pub fn cells_from_str(&mut self, s: &str) -> Result<(), Error> {
+        let mut ridx = 0;
+        let mut cidx = 0;
+        for ch in s.chars() {
+            self.rows[ridx].cells[cidx].val = match ch {
+                ' ' => None,
+                x => Some(Fe::try_from(x)?),
+            };
+
+            cidx += 1;
+            if cidx == self.rows[ridx].cells.len() {
+                cidx = 0;
+                ridx += 1;
+                if ridx == self.rows.len() {
+                    break;
+                }
+            }
+        }
+
+        if ridx == self.rows.len() && cidx == 0 {
+            Ok(())
+        } else {
+            Err(Error::BadShareDataLen { len: s.len() })
+        }
+    }
 }
 
 #[cfg(test)]
@@ -568,8 +587,7 @@ mod tests {
 
     #[test]
     fn user_test() {
-        let mut worksheet =
-            Worksheet::new("ms", CreateMode::Create, 48, Checksum::Codex32, 0).unwrap();
+        let mut worksheet = Worksheet::new("ms", 48, Checksum::Codex32, 0).unwrap();
         assert!(worksheet.handle_input_change(0, 0, "c").is_ok());
         assert!(worksheet.handle_input_change(0, 1, "c").is_ok());
         assert!(worksheet.handle_input_change(0, 2, "c").is_ok());
@@ -624,12 +642,15 @@ mod tests {
         assert!(worksheet.handle_input_change(0, 5, "").is_ok());
         assert_eq!(worksheet.rows[20].cells[14].val, None);
         assert_eq!(worksheet.rows[22].cells[13].val, None);
+
+        let mut s = String::new();
+        worksheet.cells_into_str(&mut s);
+        worksheet.cells_from_str(&s).unwrap();
     }
 
     #[test]
     fn minimal_bech32() {
-        let mut worksheet =
-            Worksheet::new("ms", CreateMode::Create, 17, Checksum::Bech32, 0).unwrap();
+        let mut worksheet = Worksheet::new("ms", 17, Checksum::Bech32, 0).unwrap();
         assert_eq!(worksheet.header_str(), "______");
         assert!(worksheet.handle_input_change(0, 0, "c").is_ok());
         assert_eq!(worksheet.header_str(), "C_____");

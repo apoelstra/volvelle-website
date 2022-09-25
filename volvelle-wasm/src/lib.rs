@@ -62,13 +62,7 @@ impl Session {
     /// Adds a share to a session
     pub fn new_share(&mut self) -> Result<usize, JsError> {
         let idx = self.shares.len();
-        let new = checksum_worksheet::Worksheet::new(
-            &self.hrp,
-            checksum_worksheet::CreateMode::Create,
-            self.size,
-            self.checksum,
-            idx,
-        )?;
+        let new = checksum_worksheet::Worksheet::new(&self.hrp, self.size, self.checksum, idx)?;
         self.shares.push(new);
         Ok(idx)
     }
@@ -118,6 +112,65 @@ impl Session {
             .handle_input_change(id[1], id[2], val)
             .map(|vec| vec.into_iter().map(JsValue::from).collect())
             .map_err(From::from)
+    }
+
+    /// Outputs a serialization of the session which can be read from local storage
+    pub fn local_storage_str(&self) -> String {
+        let mut ret = format!(
+            "{}_{}_{}_{}_{}",
+            self.size,
+            match self.checksum {
+                Checksum::Bech32 => 0,
+                Checksum::Codex32 => 1,
+            },
+            self.threshold,
+            self.hrp.len(),
+            self.hrp,
+        );
+        for s in &self.shares {
+            ret.push('_');
+            s.cells_into_str(&mut ret);
+        }
+        ret
+    }
+
+    /// Outputs a serialization of the session which can be read from local storage
+    pub fn update_from_local_storage_str(&mut self, s: &str) -> Result<(), JsError> {
+        let mut iter = s.splitn(5, '_');
+        self.size = iter
+            .next()
+            .ok_or_else(|| JsError::new("missing size"))?
+            .parse()?;
+        let checksum = iter
+            .next()
+            .ok_or_else(|| JsError::new("missing checksum"))?
+            .parse::<usize>()?;
+        self.checksum = match checksum {
+            0 => Checksum::Bech32,
+            1 => Checksum::Codex32,
+            _ => return Err(JsError::new("bad checksum value")),
+        };
+        self.threshold = iter
+            .next()
+            .ok_or_else(|| JsError::new("missing threshold"))?
+            .parse()?;
+        let hrp_len = iter
+            .next()
+            .ok_or_else(|| JsError::new("missing hrp len"))?
+            .parse::<usize>()?;
+        let rem = iter.next().ok_or_else(|| JsError::new("missing hrp"))?;
+        if rem.len() < hrp_len {
+            return Err(JsError::new("bad hrp len"));
+        }
+        self.hrp = rem[..hrp_len].into();
+
+        if rem.len() > hrp_len {
+            for share_data in rem[hrp_len + 1..].split("_") {
+                let idx = self.new_share()?;
+                self.shares[idx].cells_from_str(share_data)?;
+            }
+        }
+        Ok(())
     }
 }
 

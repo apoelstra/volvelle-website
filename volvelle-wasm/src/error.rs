@@ -19,6 +19,12 @@ use std::{error, fmt};
 /// The main error type for the whole crate
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Error {
+    BadBech32Char {
+        ch: char,
+    },
+    BadShareDataLen {
+        len: usize,
+    },
     OddLength {
         data_len: usize,
     },
@@ -44,6 +50,12 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::BadBech32Char { ch } => {
+                write!(f, "Bad bech32 character {}", ch)
+            }
+            Error::BadShareDataLen { len } => {
+                write!(f, "Bad share data length {}", len)
+            }
             Error::OddLength { data_len } => {
                 write!(
                     f,

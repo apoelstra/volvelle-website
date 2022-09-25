@@ -12,8 +12,28 @@ const {Session} = wasm_bindgen;
 * I can call `new_session`, and the await keywoard doesn't work in onload="".
 */
 async function body_onload() {
+    // Init wasm
     await wasm_bindgen('../pkg/volvelle_wasm_bg.wasm');
+
+    // Grab data from local storage, if any
+    let data = null;
+    if (g_has_local_storage) {
+        data = localStorage.getItem("session");
+    }
+
+    // Create new session (will blank local storage, which is why we fetched any
+    // existing data in the line above)
     await new_session();
+
+    // Update session with localStorage data, if there was any.
+    if (data !== null) {
+        g_session.update_from_local_storage_str(data);
+        cancelGlobalParams();
+        localStorage.setItem("session", g_session.local_storage_str());
+        for (idx = 0; idx < g_session.n_shares(); idx++) {
+            createChecksumWorksheet(idx, g_session.get_checksum_worksheet_cells(idx));
+        }
+    }
 }
 
 /**
@@ -55,14 +75,12 @@ const g_has_local_storage = function() {
 * destructive.
 */
 async function new_session() {
-    if (g_has_local_storage) {
-        localStorage.clear();
-    }
-
     if (g_session !== undefined) {
         for (idx = 0; idx < g_session.n_shares(); idx++) {
-            const del = document.getElementById("a_worksheet_" + idx);
-            del.parentNode.removeChild(del);
+            const del1 = document.getElementById("a_worksheet_" + idx);
+            del1.parentNode.removeChild(del1);
+            const del2 = document.getElementById("div_worksheet_" + idx);
+            del2.parentNode.removeChild(del2);
         }
     }
 
@@ -72,6 +90,10 @@ async function new_session() {
        document.getElementById("i_size").value,
        document.getElementById("i_checksum").value,
     );
+
+    if (g_has_local_storage) {
+        localStorage.setItem("session", g_session.local_storage_str());
+    }
 }
 
 /**
@@ -94,7 +116,7 @@ async function selectGlobalParams() {
      console.assert(g_session !== undefined);
      const changed = globalParamsChanged();
 
-     document.getElementById("bt_update").disabled = !changed;
+     document.getElementById("bt_update").value = changed ? "Update & Clear Shares" : "Clear Shares";
      document.getElementById("bt_cancel").disabled = !changed;
 }
 
@@ -105,10 +127,9 @@ async function selectGlobalParams() {
 */
 async function updateGlobalParams() {
      console.assert(g_session !== undefined);
-     console.assert(globalParamsChanged()); // button should've been disabled otherwise
 
-     if (g_session.n_shares() == 0 || confirm("Updating global parameters will erase all shares! Are you sure?")) {
-         document.getElementById("bt_update").disabled = true;
+     if (g_session.n_shares() == 0 || confirm("This will erase all shares! Are you sure?")) {
+         document.getElementById("bt_update").value = "Clear Shares";
          document.getElementById("bt_cancel").disabled = true;
          return new_session();
      }
@@ -119,12 +140,11 @@ async function updateGlobalParams() {
 */
 async function cancelGlobalParams() {
      console.assert(g_session !== undefined);
-     console.assert(globalParamsChanged()); // button should've been disabled otherwise
      document.getElementById("i_hrp").value = g_session.hrp;
      document.getElementById("i_k").value = g_session.threshold;
      document.getElementById("i_size").value = g_session.size;
      document.getElementById("i_checksum").value = g_session.checksum;
-     document.getElementById("bt_update").disabled = true;
+     document.getElementById("bt_update").value = "Clear Shares";
      document.getElementById("bt_cancel").disabled = true;
 }
 
@@ -136,6 +156,9 @@ async function newInitialShare() {
     const idx = g_session.new_share();
     createChecksumWorksheet(idx, g_session.get_checksum_worksheet_cells(idx));
     showDiv("div_worksheet_" + idx);
+    if (g_has_local_storage) {
+        localStorage.setItem("session", g_session.local_storage_str());
+    }
     return;
 }
 
@@ -210,7 +233,8 @@ function createChecksumWorksheet(idx, cells) {
     document.getElementById('div_content').appendChild(table);
 
     const share_link = document.createElement("a");
-    share_link.textContent = "Share ______";
+    const header_str = g_session.get_checksum_worksheet_header_str(idx);
+    share_link.textContent = "Share " + header_str;
     share_link.href = "#";
     share_link.addEventListener("click", () => { showDiv("div_worksheet_" + idx); });
     share_link.id = "a_worksheet_" + idx;
@@ -246,6 +270,11 @@ async function handleInputChange(ev) {
         ...g_worksheet_actions,
         ...g_session.handle_input_change(ev.target.id, ev.target.value),
     ];
+
+    // Update local storage
+    if (g_has_local_storage) {
+        localStorage.setItem("session", g_session.local_storage_str());
+    }
 
     // Update link text on home page
     const idx = g_session.get_idx_of(ev.target.id);

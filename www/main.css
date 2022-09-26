@@ -116,10 +116,16 @@ img {
 
 H1 {
   font-family: verdana, arial;
-  font-size: 14pt;
+  font-size: 18pt;
+  text-decoration: underline;
 }
 
 H2 {
+  font-family: verdana, arial;
+  font-size: 14pt;
+}
+
+H3 {
   font-family: verdana, arial;
   font-style: oblique;
   font-weight: normal;

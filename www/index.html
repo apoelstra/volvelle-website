@@ -21,7 +21,7 @@
         <a href="help/index.html" class="trlink">HELP!</a>
       </div>
     </div>
-    <div id="content">
+    <div id="div_content">
     <h1>Codex32</h1>
     <p>Codex32 is an error-correcting code designed to be computable without the use of
     electronic computers. Users can compute and verify checksums by hand; we have
@@ -43,10 +43,54 @@
     make sure you have a Bitcoin wallet which is able to import codex32-encoded seed
     shares.
     </p>
-    <p>As of this writing (April 2022), no such wallets exist. Therefore this project
-    should be considered as a fun experiment, but cannot be used in practice. Very
-    reckless users can consider converting their SLIP39 or BIP39 seed words into the
+    <p><b>As of this writing (September 2022), no such wallets exist. Therefore this project
+    should be considered as a fun experiment, but cannot be used in practice.</b> Very
+    reckless users can consider coercing their SLIP39 or BIP39 seed words into the
     codex32 encoding, and then converting back before wallet import.</p>
+    <p>That caveat aside, let's get started!</p>
+    <p><ol>
+    <li>The first step is to <a href="#">download and print the codex32 booklet</a>.
+      <ul>
+      <li>There are five pages which contain the volvelles, which should be printed on
+      heavy paper or cardstock; the remainder can be printed on normal paper.</li>
+      <li>We recommend using a colour printer, but it's not necessary.</li>
+      <li>You will likely want to print multiple copies of the Checksum and Translation
+      Worksheets. They are included in the full booklet or <a href="docs/index.html">you
+      can download them individually.</a></li>
+      </ul>
+    <li>Cut out and assemble the volvelles, following the included instructions.</li>
+    <li>Following the instructions in the booklet, generate your secret:
+      <ul>
+      <li>Choose a threshold <i>k</i>-of-<i>n</i>, e.g. 2-of-3, meaning that you
+       will create 3 shares, any 2 of which will recover your secret.</li>
+      <li>Using the Random Character Worksheet, create <i>k</i> random initial shares.</li>
+      <li>Using the Translation Worksheet, create as many derived shares (up to 31 total)
+       as you need to get up to <i>n</i>.</li>
+      </ul></li>
+    <li>To recover your secret, use the Recovery Wheel and Translation Worksheet, or
+      directly enter your seeds into a codex32-enabled wallet.</li>
+    </ol>
+    <p>Advanced users are encouraged to check out the <a href="https://github.com/roconnor-blockstream/SSS32/">git repo</a>
+     for the booklet, which is implemented in hand-written PostScript, or to read the
+     <a href="#">mathematical companion</a> for the underlying theory.</p>
+    <h1>Interactive Tools</h1>
+    <p>On this site, we have some <a href="interactive/index.html">interactive tools</a>
+     which may help you getting started:</p>
+    <p><ol>
+      <li>The <b>New Initial Share</b> link is a copy of the paper Checksum Worksheet which
+       automatically fills in cells based on your share data. It is worthwhile to check
+       your work (using a dummy key!) against this tool before trying to use it for
+       real data &mdash; if you mess up the Checksum Worksheet you may not be able to
+       tell until you've spent upwards of an hour completing it, which is not a fun
+       experience.
+      <li>The <b>New Derived Share</b> (TODO) link allows you to derive additional shares
+       from your initial ones.</li>
+      <li>The <b>Error Correction</b> (TODO) link will let you correct errors in a
+       share or secret. Unlike every other worksheet on this site, it is safe to use
+       this worksheet with real secret data.
+    </ol></p>
+    <p>This site is entirely client-side content and requires no server support. It can
+     be <a href="#">downloaded and hosted locally</a> from our git repo.</p>
     </div>
 </body>
 </html>

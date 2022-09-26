@@ -21,25 +21,141 @@
         <a href="../help/index.html" class="trlink">HELP!</a>
       </div>
     </div>
-    <div id="content">
+    <div id="div_content">
       <h1>General</h1>
       <h2>Is this real? Is it secure?</h2>
+      <p>Yes, this is a real project, and one of us (Pearlwort) is storing a nontrivial
+      amount of Bitcoin with it. However, because of the lack of hardware wallet support,
+      we don't yet recommend anybody else do this.</p>
+
+      <p>As far as security, this scheme uses the simple mathematics of Shamir's Secret
+       Sharing Scheme. It avoids complications related to random number generation by
+       asking users to use dice, and avoids complications related to implementation
+       details by basically having users do the math by hand, using simple lookup tables
+       (in the form of volvelles) to assist.</p>
+
+      <p>Mathematically inclined readers can read the <a href="#">mathematical companion</a>
+       for more information.</p>
+
       <h2>How does this compare to SLIP39?</h2>
+      <p>This scheme is essentially the same as SLIP39, with the following differences:</p>
+      <p><ul>
+        <li>The checksum is longer, slightly stronger, and designed to be computable by hand.</li>
+        <li>Our encoding is more compact, giving us room for a bit of more metadata,
+         which is also designed to be readable by hand.</li>
+        <li>Unlike SLIP39, we do not support passphrases or hardening of any form.</li>
+        <li>Unlike SLIP39, we have no hardware wallet support. But we hope that will change!</li>
+      </ul></p>
+
       <h2>How does this compare to BIP39?</h2>
+      <p>BIP39 is a trainwreck of a protocol with the following issues, shared with neither
+       codex32 nor SLIP39:</p>
+      <p><ul>
+         <li>BIP39 is encoded using 11-bit words, making it extremely hard to convert it
+          to any other format without use of computers.</li>
+         <li>BIP39 has an 4- or 8-bit checksum, which is too small to provide meaningful protection
+          against random errors, and smaller than a single word, meaning that the "checksum
+          word" also contains key data and so cannot simply be dropped.</li>
+         <li>Compounding this, because you can't drop the last word, BIP39 encodes
+          128-bit secrets in 132 bits and 256-bit secrets in 264 bits, so the data
+          doesn't fit in normal data containers (e.g. codex32-encoded secrets).</li>
+         <li>BIP39's checksum uses multiple SHA2 iterations so it cannot be verified without
+          the use of electronic computers or multiple days(!!) of hand computation.</li>
+         <li>BIP39's checksum provides <b>zero</b> protection against adversarial errors.
+          It is easy to change even a single word of a BIP39 phrase in a way that it
+          will appear to be valid and simply have no coins on it.</li>
+         <li>Consequently BIP39 cannot provide <b>any</b> error correction capability.</li>
+         <li>BIP39 seed words are converted to BIP32 seeds (what your wallet actually
+          uses) using SHA-512 to extend the words to 512 bits, which is completely
+          unnecessary and prevents you from simply converting the words to a BIP32 seed
+          and forgetting about BIP39 entirely.</li>
+         <li>BIP39 does this by <b>hashing the words themselves</b> even though it supports
+          <b>wordlists in multiple languages</b> and provides <b>no in-band way to indicate
+          which language is being used</b>. Every part of this is an independent mistake in
+          the protocol design.</li>
+      </ul></p>
+      <p>I do not mean to disparage the authors of BIP39, who are intelligent, well-meaning,
+       and have all made great contributions to the space. But BIP39 was designed in 2013
+       when the Bitcoin ecosystem as a whole was lacking the institutional knowledge that
+       we take for granted today, and you can tell.</p>
+      <p>Unfortunately BIP39 is by far the most widely-supported mechanism for producing
+       BIP32 seeds today, both because of its advanced age and because the aforementioned
+       protections against converting BIP39 words into anything better.</p>
 
       <h1>Usage</h1>
       <h2>Why would anyone choose to use this?</h2>
+      <p>See the booklet for more detail, but essentially the reason to use this scheme,
+       even though it is very time consuming (see next question) and inconvenient, is
+       that <b>you do not want an indefinite trust requirement on electronic computers.</b>
+       codex32 lets you generate and distribute shares, and verify the checksums on said
+       shares, entirely by hand.</p>
+      <p>This means, for example, that if you are holding a codex32 share, you can check
+       its integrity every year (say), and have a record that the share was recently
+       intact and safe, even if it is years or decades old. To accomplish something
+       using computers, you would need to use the hardware of the day, and at <i>some</i>
+       point in the next century the "hardware of the day" will turn out to have some
+       fatal security bug.</p>
+      <p>Additionally, even during setup, codex32 gives you assurances that are impossible
+       for computers to provide: that the randomness used during generation was uniform
+       and un-tampered-with; that all intermediate computations were stored on specific
+       sheets of paper and nowhere else; that the contents of said paper can then be
+       securely and permanently destroyed; that there are no electromagnetic sidechannels;
+       and (for a mathematically-inclined user) that the algorithms used are exactly
+       what they are supposed to be.</p>
+      <p>As a final benefit, anybody who is able to find a copy of the booklet will be
+       able to recover your secret, even if the rest of the world has moved on and no
+       protocols or hardware from the time of share creation is in use anymore.</p>
+
       <h2>How long will it take?</h2>
+      <p>After some practice, you will likely be able to produce a 128-bit checksum
+       worksheet (and a copy, to check against) in 30-40 minutes; translate shares
+       in about 5 minutes, and add them in another 5.</p>
+      <p>For a 2-of-3 scheme this works out to 3&times;40 + 3&times;5 = 2 hours and
+       15 minutes to set up; then recovery takes about 10 minutes (but 40 minutes
+       to check, if you check the recovered secret by hand).</p>
+
+      <p>For a 3-of-5 scheme the same math gives works out to a bit under 5 hours
+       to produce the shares, 15 minutes to recover and 40 minutes to check the
+       recovery.</p>
+
+      <p>Inexperienced users can expect to take 2-3 times this long.</p>
+      <p>As long as you keep your incomplete work in a secure location, you can
+       spread this work over several days, and/or enlist a highly-trusted accomplice.</p>
+
       <h2>Can I use this for passwords? For safe combinations?</h2>
+      <p>Yes, but you will need to modify the checksum worksheet to be much shorter,
+       and the resulting passwords may not contain any <tt>I</tt>'s, <tt>1</tt>'s,
+       <tt>B</tt>'s or <tt>O</tt>'s. We do not recommend or endorse this.</p>
+      <p>But it's possible.</p>
 
       <h1>Hardware Wallets</h1>
       <h2>What hardware wallets are supported?</h2>
+      <p>As of September 2022, <b>none</b>.
+
       <h2>Can I interconvert my existing SLIP39 or BIP39 seed words?</h2>
+      <p>TODO finish this before the conf in Oct</p>
 
       <h1>Dice Worksheet</h1>
       <h2>Do I actually need to re-roll twice when my first two rolls were the same?</h2>
-      <h2>How can I speed this up?</h2>
+      <p>Yes, or else the results could be biased.</p>
+      <p>One way to illustrate the problem is to imagine that you have a die that comes up
+       one 99% of the time. Then with high probability, you will roll two ones; if you
+       then just kept rolling the die until it came up with a different number, you'd
+       be guaranteed to get a "1 bit" because the first roll was less than the final roll.
+      </p>
+      <p>To contrast, if you repeatedly rolled that die twice until finally one of the
+       rolls was not 1, then there's a 50% chance that the non-1 roll would come first
+       (a "1 bit") and a 50% chance it'd come second (a "0 bit").</p>
 
+      <h2>How can I speed this up?</h2>
+      <p>Keep practicing until you've memorized much of the volvelles, or get a
+       partner to help fill in the worksheets (but make sure you trust this person
+       with your Bitcoin secrets!)</p>
+      <p>If you are really certain your dice are unbiased, it is also technically
+       possible to directly generate characters instead of the Random Character
+       Worksheet. But if you do this wrong, you might introduce bias anyway. We
+       will not condone or endorse this, and we will not tell you how to do it.</p>
+    
       <h1>Translation Worksheet</h1>
       <h2>How can I use these worksheets when my threshold is greater than 3?</h2>
     </div>

@@ -133,7 +133,25 @@
       <p>As of September 2022, <b>none</b>.
 
       <h2>Can I interconvert my existing SLIP39 or BIP39 seed words?</h2>
-      <p>TODO finish this before the conf in Oct</p>
+      <p>In general, we do not recommend doing this, because the resulting composite scheme
+      will be complicated and non-standard, <i>greatly</i> increasing the risk that you
+      will lose funds simply by forgetting how your scheme works.</p>
+      <p>Having said that, SLIP39 words represent 10-bit numbers, or two 5-bit bech32
+      characters, so there is a natural way to convert a 128-bit or 256-bit seed from
+      their wordlist to our encoding (and back), after which you can simply append
+      the codex32 checksum.</p>
+      <p>If you retain the SLIP39 header and checksum, your data will be longer than 128
+      or 256 bits, and you will need a special purpose checksum worksheet. Our Documents
+      page has such worksheets. But again, we strongly discourage this.</p>
+      <p>For BIP39, the same caveats apply, but worse: BIP39 words represent <i>11 bits</i>,
+      so the only way to convert them into 5-bit words by hand is to go through binary.
+      This is error-prone and it is basically impossible to detect mistakes, since BIP39
+      does have a human-verifiable checksum, but if you insist on doing it, there is a
+      <a href="../docs/bip39-conversion-worksheet.pdf">worksheet and conversion table here</a>.
+      Note that unlike SLIP39, there is no header to drop, and it is difficult to drop
+      the checksum because it is embedded in the final word alongside actual data. You
+      will also definitely need a computer to recover it.
+      </p>
 
       <h1>Dice Worksheet</h1>
       <h2>Do I actually need to re-roll twice when my first two rolls were the same?</h2>
@@ -155,7 +173,7 @@
        possible to directly generate characters instead of the Random Character
        Worksheet. But if you do this wrong, you might introduce bias anyway. We
        will not condone or endorse this, and we will not tell you how to do it.</p>
-    
+
       <h1>Translation Worksheet</h1>
       <h2>How can I use these worksheets when my threshold is greater than 3?</h2>
     </div>
